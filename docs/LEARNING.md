@@ -16,7 +16,7 @@ Résultats sur le Samsung A06 (Android 15) :
 | Risque | Résultat |
 |---|---|
 | yt-dlp sur le téléphone, avec les défis JavaScript de YouTube | OK avec QuickJS, **après** mise à jour du moteur (le yt-dlp embarqué donnait un HTTP 403) |
-| Lecture de 10 min écran éteint sur un Samsung | OK |
+| Lecture de 10 min écran éteint sur un Samsung | OK : morceau entier (13 min 19 s) joué écran éteint, sans réveil, jusqu'à la fin du fichier |
 | Notification et contrôles de l'écran de verrouillage | OK |
 | Pause quand on débranche le casque | OK |
 | Mise à jour de yt-dlp | OK : 2025.11.12 → 2026.08.19 |
