@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.room)
 }
 
 android {
@@ -37,6 +39,11 @@ android {
     }
 }
 
+// Exported schemas are committed: Room checks AutoMigrations (M5) against them.
+room {
+    schemaDirectory("$projectDir/schemas")
+}
+
 dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.material3)
@@ -54,4 +61,21 @@ dependencies {
 
     implementation(libs.youtubedl.library)
     implementation(libs.youtubedl.ffmpeg)
+
+    implementation(libs.room.runtime)
+    ksp(libs.room.compiler)
+    implementation(libs.work.runtime)
+    implementation(libs.hilt.work)
+    ksp(libs.hilt.androidx.compiler)
+    implementation(libs.navigation.compose)
+    implementation(libs.datastore.preferences)
+    implementation(libs.tink.android)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.kotlinx)
+    implementation(libs.okhttp)
+    implementation(libs.serialization.json)
+    implementation(libs.coil.compose)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.mockwebserver)
 }
