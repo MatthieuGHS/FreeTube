@@ -1,0 +1,33 @@
+[project]
+name = "freetube"
+version = "0.1.0"
+description = "FreeTube API: library, sync and S3 pre-signed URLs"
+authors = [
+    { name = "MatthieuGHS", email = "gurrisi.matthieu@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "boto3>=1.43.111",
+    "fastapi>=0.143.0",
+    "uvicorn>=0.54.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.19,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.13.1",
+    "pytest>=9.1.1",
+    "ruff>=0.17.0",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
