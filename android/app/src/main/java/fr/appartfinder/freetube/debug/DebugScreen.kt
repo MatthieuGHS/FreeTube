@@ -59,7 +59,8 @@ fun DebugScreen(viewModel: DebugViewModel = hiltViewModel()) {
         ) { Text("Lire") }
         Button(onClick = { controller?.pause() }, enabled = controller != null) { Text("Pause") }
         Button(onClick = viewModel::updateEngine, enabled = !state.busy) { Text("Mettre à jour le moteur") }
-        Text("yt-dlp : ${state.engineVersion ?: "non initialisé"}")
+        // versionName is only known after a first update; before that the bundled build is used.
+        Text("yt-dlp : ${state.engineVersion ?: "version embarquée"}")
     }
 }
 

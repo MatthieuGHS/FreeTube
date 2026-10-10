@@ -62,8 +62,8 @@ class DebugViewModel @Inject constructor(
     }
 
     private fun downloadedFile() =
-        audioDir.listFiles { f -> f.name.startsWith("$TEST_VIDEO_ID.") && !f.name.endsWith(".part") }
-            ?.firstOrNull()
+        // Exactly "<id>.<ext>": excludes yt-dlp leftovers such as "<id>.m4a.part" or "<id>.temp.m4a".
+        audioDir.listFiles { f -> f.nameWithoutExtension == TEST_VIDEO_ID }?.firstOrNull()
 
     private fun runBusy(label: String, block: suspend () -> String) {
         if (_state.value.busy) return
@@ -71,7 +71,7 @@ class DebugViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             val status = runCatching { block() }.getOrElse { "Erreur : ${it.message}" }
             _state.update {
-                it.copy(status = status, busy = false, progress = null, engineVersion = engine.versionName(context))
+                it.copy(status = status, busy = false, progress = null, engineVersion = YoutubeDL.versionName(context))
             }
         }
     }

@@ -30,7 +30,7 @@ App Android (YouTube → audio → S3 + lecteur) et site web perso. **Source de 
 |---|---|
 | Serveur (`server/`, uv) | `uv run pytest` · `uv run ruff check` · `uv run ruff format --check` |
 | Web (`web/`) | `npm run gen:api` · `npx tsc --noEmit` · `npx eslint .` |
-| Android (`android/`) | `./gradlew lint test` · `./gradlew assembleDebug` |
+| Android (`android/`) | `export JAVA_HOME=/opt/android-studio/jbr` (le Java 11 système est trop vieux) · `./gradlew lint test` · `./gradlew assembleDebug` · `adb install -r app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` |
 | Prod | `ssh freetube` (lecture seule sans accord) · voir `docs/deploy.md` |
 
 Mettre ce tableau à jour quand une commande change.
