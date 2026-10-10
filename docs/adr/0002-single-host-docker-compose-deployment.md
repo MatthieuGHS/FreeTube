@@ -16,7 +16,7 @@ d'entretien.
 | Orchestration | Docker Compose sur l'instance | ECS, Kubernetes | Démesuré pour un conteneur applicatif |
 | HTTPS | Caddy (certificat automatique) | Nginx + certbot, ALB | Une ligne de config. L'ALB coûte environ 20 $/mois |
 | Installation de Docker | Paquets Ubuntu (`docker.io`, `docker-compose-v2`, `docker-buildx`) | Dépôt de Docker Inc. | Correctifs automatiques via `unattended-upgrades` ; versions un peu plus anciennes |
-| Base SQLite | Dossier de l'hôte `/srv/freetube/data` | Volume Docker nommé | Le script de sauvegarde (sur l'hôte) lit la base directement |
+| Base SQLite | Dossier de l'hôte `/srv/freetube/data` | Volume Docker nommé | Inspection et restauration faciles depuis l'hôte. (La sauvegarde tourne finalement dans le conteneur : ADR 0003) |
 | Logs | Pilote Docker `local` | `json-file` (défaut) | `json-file` ne fait aucune rotation et remplirait les 20 Gio du disque |
 | Identité AWS | Rôle d'instance via IMDSv2 (hop limit 2) | Clés dans `.env` | Pas de secret à stocker ni à faire tourner (D9) |
 | Utilisateur du conteneur | Non-root, uid 1000 | root | Limite les dégâts d'une faille applicative |

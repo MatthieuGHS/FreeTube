@@ -29,10 +29,11 @@ App Android (YouTube → audio → S3 + lecteur) et site web perso. **Source de 
 
 | Zone | Commande |
 |---|---|
-| Serveur (`server/`, uv) | `uv run pytest` · `uv run ruff check` · `uv run ruff format --check` |
+| Serveur (`server/`, uv) | `uv run pytest` · `uv run ruff check` · `uv run ruff format --check` · contrat API : `uv run python -m freetube.export_openapi` (à relancer et commiter après tout changement d'API) |
 | Web (`web/`) | `npm run gen:api` · `npx tsc --noEmit` · `npx eslint .` |
 | Android (`android/`) | `export JAVA_HOME=/opt/android-studio/jbr` (le Java 11 système est trop vieux) · `./gradlew lint test` · `./gradlew assembleDebug` · `adb install -r app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` |
 | Image (`server/`) | `docker build --platform linux/arm64 .` (la prod est en arm64) |
+| Tâches serveur | `python -m freetube.hash_password` · `python -m freetube.backup [--restore KEY]` · `python -m freetube.purge` (dans le conteneur, voir `docs/deploy.md`) |
 | Prod | `ssh freetube` (lecture seule sans accord) · déployer : `docs/deploy.md` · console AWS : `docs/infra-setup.md` |
 
 Mettre ce tableau à jour quand une commande change.

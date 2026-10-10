@@ -23,12 +23,19 @@ git clone https://github.com/MatthieuGHS/FreeTube.git ~/freetube
 cd ~/freetube/infra
 cp .env.example .env          # .env n'est jamais commité ; vérifie les valeurs
 
-# 3. Démarrage (la première construction prend quelques minutes)
-docker compose up -d --build
+# 3. Construction de l'image, puis le mot de passe du site web
+docker compose build
+docker compose run --rm -it api python -m freetube.hash_password
+#    → colle la ligne FREETUBE_PASSWORD_HASH='…' affichée dans .env (guillemets simples compris)
+
+# 4. Démarrage. Au démarrage, l'API applique les migrations de la base.
+docker compose up -d
 docker compose ps             # les deux services doivent être « running »
 ```
 
-4. Fais la bascule DNS (`docs/infra-setup.md`, étape 4), puis suis l'obtention du certificat :
+5. Installe les tâches quotidiennes (voir [Tâches quotidiennes](#tâches-quotidiennes)).
+
+6. Fais la bascule DNS (`docs/infra-setup.md`, étape 4), puis suis l'obtention du certificat :
 
    ```bash
    docker compose logs -f caddy   # attendre « certificate obtained successfully » ; Ctrl+C pour quitter
@@ -69,6 +76,50 @@ docker image prune -f         # supprime les anciennes images, sinon le disque s
 ```
 
 `up -d --build` ne recrée que les conteneurs qui ont changé. La coupure dure quelques secondes.
+Les migrations de la base s'appliquent seules au démarrage de `api`.
+Si `infra/systemd/` a changé, réinstalle les unités (section suivante).
+
+### Passage de M1 à M2 (une seule fois)
+
+M2 exige `FREETUBE_PASSWORD_HASH` : sans elle, `api` refuse de démarrer (message clair dans les logs).
+
+```bash
+cd ~/freetube && git pull && cd infra
+docker compose build
+docker compose run --rm -it api python -m freetube.hash_password   # colle la ligne dans .env
+docker compose up -d
+```
+
+Puis installe les tâches quotidiennes ci-dessous.
+
+## Tâches quotidiennes
+
+Deux timers systemd sur l'hôte. Chacun lance une commande **dans** le conteneur `api` (`docker compose exec`) :
+
+| Timer | Heure (UTC) | Commande | Rôle |
+|---|---|---|---|
+| `freetube-backup` | 02:30 | `python -m freetube.backup` | Copie à chaud de la base, contrôle d'intégrité, envoi vers `s3://freetube-7k3q9x/backups/freetube-AAAAMMJJ.db` |
+| `freetube-purge` | 03:30 | `python -m freetube.purge` | Supprime définitivement les morceaux supprimés depuis plus de 30 jours (ligne + fichiers S3), les sessions expirées et l'ancien journal d'idempotence |
+
+La sauvegarde passe avant la purge : la dernière sauvegarde contient encore les morceaux purgés le jour même.
+
+Installation, ou réinstallation après une modification de `infra/systemd/` :
+
+```bash
+sudo cp ~/freetube/infra/systemd/freetube-* /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now freetube-backup.timer freetube-purge.timer
+systemctl list-timers 'freetube-*'            # prochaine exécution de chaque timer
+```
+
+Test immédiat, sans attendre la nuit :
+
+```bash
+sudo systemctl start freetube-backup.service
+journalctl -u freetube-backup.service -n 20   # attendu : « backup done key=backups/freetube-… »
+```
+
+`Persistent=true` : si le serveur était éteint à l'heure prévue, la tâche tourne au démarrage suivant.
 
 ## Lire les logs
 
@@ -81,4 +132,29 @@ Les logs utilisent le pilote `local` de Docker, avec une rotation automatique : 
 
 ## Restaurer la base depuis S3
 
-Cette section sera écrite en M2, avec la base et le script de sauvegarde, et testée en M7.
+À tester une fois pour de vrai (M7). La restauration **ne supprime jamais** la base courante : elle la
+renomme en `freetube.db.before-restore`.
+
+1. Choisis la sauvegarde : console S3 → `freetube-7k3q9x` → dossier `backups/`. Note la clé, par exemple
+   `backups/freetube-20261010.db`. Les versions plus anciennes du même jour restent accessibles 30 jours
+   (onglet **Versions**).
+2. Restaure, l'API arrêtée (personne n'écrit pendant le remplacement) :
+
+   ```bash
+   ssh freetube
+   cd ~/freetube/infra
+   docker compose stop api
+   docker compose run --rm api python -m freetube.backup --restore backups/freetube-20261010.db
+   docker compose start api
+   ```
+
+   La commande télécharge la sauvegarde, vérifie son intégrité (elle refuse un fichier corrompu), met
+   l'ancienne base de côté, supprime son journal WAL, puis installe la sauvegarde.
+3. Vérifie : `curl https://appartfinder.fr/api/health`, puis connecte-toi au site.
+4. Le compteur `server_rev` ne recule pas : la restauration garde le plus grand des deux (ancienne base,
+   sauvegarde), pour que les curseurs de synchro des clients restent valides.
+   Limite : les modifications que le serveur avait reçues **après** la sauvegarde sont perdues côté
+   serveur, même si le téléphone les a encore. Le téléphone ne les renverra que s'il les modifie de
+   nouveau. Si l'ancienne base est perdue elle aussi (disque mort), il faut remettre à zéro le curseur
+   de synchro du téléphone (procédure décrite en M5).
+5. Quand tout va bien, supprime `/srv/freetube/data/freetube.db.before-restore`.
