@@ -72,7 +72,11 @@ Elle n'autorise que lire, écrire et supprimer des objets de `freetube-7k3q9x`, 
 
 1. IAM → **Rôles** → **Créer un rôle**.
 2. Type d'entité de confiance : *Service AWS*. Cas d'utilisation : **EC2**. **Suivant**.
-3. Coche **`freetube-s3`** et **`AmazonSSMManagedInstanceCore`**. **Suivant**.
+3. La liste contient plus de 1 000 politiques, sur plusieurs pages : utilise la **barre de recherche**.
+   Tape `freetube`, coche **`freetube-s3`**. Puis tape `AmazonSSMManagedInstanceCore` et coche-la aussi
+   (les cases cochées restent cochées quand la recherche change). **Suivant**.
+   Si `freetube-s3` reste introuvable : la politique (2a) n'a pas été créée, ou l'a été après l'ouverture de
+   cet écran. Dans ce cas, clique sur le bouton d'actualisation ↻ à côté de la recherche.
    (`AmazonSSMManagedInstanceCore` permet d'ouvrir un terminal sur l'instance depuis la console, via
    Session Manager, même si SSH ne marche plus. C'est ta porte de secours.)
 4. Nom : `freetube-ec2`. **Créer le rôle**.
