@@ -1,0 +1,29 @@
+services:
+  api:
+    build: ../server
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - /srv/freetube/data:/data
+    logging:
+      driver: local # rotated by default, unlike json-file which would fill the 20 GiB disk
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: local
+
+volumes:
+  caddy_data:
+  caddy_config:
