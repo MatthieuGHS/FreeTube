@@ -112,3 +112,67 @@ parce que ton résolveur gardait l'ancienne réponse en cache pendant le TTL (1 
    passerait-il si le hop limit IMDS était à 1 ?
 3. Pourquoi le service `api` ne publie-t-il aucun port, et quel risque créerait `ports: ["8000:8000"]`
    avec l'option `--forwarded-allow-ips *` ?
+
+---
+
+## M2 — Backend (2026-10-10)
+
+### Ce qui a été construit
+
+Tout le serveur du brief §7 :
+- authentification web (mot de passe argon2, session en cookie) et authentification des appareils (token) ;
+- upload et lecture par URLs pré-signées S3 ;
+- synchro dans les deux sens (push des opérations du téléphone, pull des changements) ;
+- écritures web avec verrouillage optimiste ;
+- purge, sauvegarde et restauration, avec deux timers systemd ;
+- contrat OpenAPI exporté et testé.
+
+Le design a été choisi par une arena pstack : 3 designs indépendants (Opus, Sonnet, Haiku ; Fable a
+abandonné), un juge, puis une synthèse. Le résultat est documenté dans l'ADR 0003.
+
+Vérifié le 2026-10-10 :
+
+| Critère | Résultat |
+|---|---|
+| Tests pytest (S3 simulé par moto) | 54 tests verts : auth, upload idempotent, synchro, téléphone gagnant, 409/428, résurrection, purge, sauvegarde/restauration, concurrence, logs sans secrets, OpenAPI à jour |
+| Déployé | Migration au démarrage, `/api/health` OK, mauvais mot de passe 401, bon mot de passe 204 |
+| Sauvegarde réelle | `backups/freetube-20261010.db` envoyé sur S3 par le timer systemd, via le rôle IAM |
+
+### Concepts
+
+- **URL pré-signée** : une URL S3 signée par le serveur, valable 15 min (PUT) ou 1 h (GET). Celui qui la
+  détient peut faire exactement cette opération sur exactement cet objet. Les fichiers ne passent jamais
+  par le serveur (D3).
+- **Idempotence** : rejouer une opération ne change rien de plus. Ici : `upload` deux fois donne le même
+  état ; un `op_id` déjà traité est ignoré (table `processed_ops`, écrite dans la même transaction).
+- **Outbox (côté téléphone, M5)** : la liste des modifications locales à envoyer. Le serveur applique un
+  lot en entier ou pas du tout, puis répond `{acked: n}` ; le téléphone peut alors vider son outbox.
+- **Compteur de révisions (`server_rev`)** : chaque modification reçoit le numéro suivant, attribué dans
+  la transaction qui écrit. Un client demande « tout ce qui a `rev > curseur` » et ne rate jamais rien,
+  sans dépendre des horloges.
+- **Pierre tombale (soft delete)** : une suppression remplit `deleted_at` au lieu d'effacer la ligne, pour
+  que les autres clients l'apprennent par la synchro. La purge efface vraiment après 30 jours.
+- **Verrouillage optimiste** : le web envoie le `rev` qu'il a affiché (`If-Match`). Si quelqu'un a modifié
+  l'élément entre-temps, le serveur répond 409 au lieu d'écraser.
+- **« Le téléphone gagne »** : ses opérations s'appliquent toujours, même sur un élément modifié ou
+  supprimé ailleurs. Le conflit est seulement journalisé, grâce au `cursor` qu'il envoie.
+- **`BEGIN IMMEDIATE`** : SQLite n'a qu'un écrivain à la fois. Prendre le verrou d'écriture dès le début
+  fait patienter les écritures concurrentes au lieu de les faire échouer.
+- **Une seule source de vérité pour les règles** : `library.py` est le seul module qui modifie morceaux et
+  playlists. La « garde » (`IfRev`, `Create`, `PHONE_WINS`) dit qui gagne.
+
+### Fichiers à lire, dans l'ordre
+
+1. `docs/adr/0003-backend-write-path-and-sync.md` : les décisions et ce qui a été écarté.
+2. `server/src/freetube/migrations/versions/0001_initial.py` : le schéma.
+3. `server/src/freetube/db.py` : transactions et compteur de révisions.
+4. `server/src/freetube/library.py` : toutes les règles d'écriture et la synchro.
+5. `server/tests/test_sync.py` : les règles de synchro écrites comme des scénarios.
+
+### Questions de compréhension
+
+1. Le téléphone envoie un lot, le serveur l'applique, mais la réponse se perd. Le téléphone renvoie le
+   même lot. Que se passe-t-il, et grâce à quoi ?
+2. Pourquoi le serveur incrémente-t-il `server_rev` **dans** la transaction d'écriture, et quel bug
+   apparaîtrait si on l'incrémentait juste avant, dans une transaction séparée ?
+3. Pourquoi une restauration de sauvegarde ne doit-elle jamais faire reculer `server_rev` ?
