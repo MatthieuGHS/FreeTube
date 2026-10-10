@@ -23,6 +23,7 @@ App Android (YouTube → audio → S3 + lecteur) et site web perso. **Source de 
 - Par jalon : plan (pstack) → `/ponytail` → implémentation → tests + lint → `/thermo-nuclear-code-quality-review` → ADR (`docs/adr/NNNN-titre.md`) + récap dans `docs/LEARNING.md` → commits → stop.
 - Le brief l'emporte sur les skills : ponytail ne retire jamais sécurité, validation, gestion d'erreurs ni tests.
 - Conventional commits, petits, en anglais. Jamais de secrets (`.env`, clés, tokens, `.pem`).
+- **Aucune attribution à Claude** dans les commits et les PR : pas de `Co-Authored-By`, pas de mention « Generated with Claude Code ». Claude ne doit pas apparaître dans les contributeurs GitHub.
 - Pas de dépendance sans justification. Pas d'abstraction spéculative.
 
 ## Commandes
