@@ -19,6 +19,7 @@ App Android (YouTube → audio → S3 + lecteur) et site web perso. **Source de 
 - Français pour les échanges, la doc et les textes d'UI. Anglais pour le code, les identifiants, les commits et les noms de fichiers.
 - Expliquer le pourquoi, les alternatives écartées et le compromis de chaque décision non triviale.
 - **Jamais sans accord explicite** : commande AWS, DNS, `ssh freetube` qui modifie le serveur, suppression de données. La console AWS, c'est l'utilisateur qui la manipule ; Claude écrit la config et le guide.
+- Pendant un test manuel sur le téléphone : aucune commande `adb` qui modifie l'app (`install`, `am`, `pm`) avant que l'utilisateur ait confirmé la fin du test. Une réinstallation tue le processus et coupe la lecture.
 - Par jalon : plan (pstack) → `/ponytail` → implémentation → tests + lint → `/thermo-nuclear-code-quality-review` → ADR (`docs/adr/NNNN-titre.md`) + récap dans `docs/LEARNING.md` → commits → stop.
 - Le brief l'emporte sur les skills : ponytail ne retire jamais sécurité, validation, gestion d'erreurs ni tests.
 - Conventional commits, petits, en anglais. Jamais de secrets (`.env`, clés, tokens, `.pem`).
