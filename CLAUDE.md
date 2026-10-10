@@ -11,8 +11,8 @@ App Android (YouTube → audio → S3 + lecteur) et site web perso. **Source de 
 
 - Package Android : `fr.appartfinder.freetube`
 - Bucket S3 : `freetube-7k3q9x` (eu-west-3)
-- DNS d'`appartfinder.fr` : registrar externe (lequel : à préciser avant M1)
-- Téléphone de test : Samsung Galaxy A06, Android 15 (ABI à confirmer via `adb shell getprop ro.product.cpu.abi`)
+- DNS d'`appartfinder.fr` : OVH (registrar externe, pas Route 53)
+- Téléphone de test : Samsung Galaxy A06, Android 15, arm64-v8a
 
 ## Règles de travail
 
