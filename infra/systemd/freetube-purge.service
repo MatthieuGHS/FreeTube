@@ -1,0 +1,9 @@
+[Unit]
+Description=FreeTube: purge tombstones older than 30 days
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/ubuntu/freetube/infra
+ExecStart=/usr/bin/docker compose exec -T api python -m freetube.purge

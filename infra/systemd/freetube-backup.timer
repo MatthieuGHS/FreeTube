@@ -1,0 +1,9 @@
+[Unit]
+Description=FreeTube: daily backup
+
+[Timer]
+OnCalendar=*-*-* 02:30 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
