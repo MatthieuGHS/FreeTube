@@ -7,6 +7,13 @@ App Android (YouTube → audio → S3 + lecteur) et site web perso. **Source de 
 1. Lire `docs/BRIEF.md`, puis la dernière entrée de `docs/LEARNING.md` (jalon terminé) et `git log --oneline -20`.
 2. Les jalons sont en section 11 du brief. Un jalon à la fois, puis stop et attente de validation.
 
+## Paramètres actés
+
+- Package Android : `fr.appartfinder.freetube`
+- Bucket S3 : `freetube-7k3q9x` (eu-west-3)
+- DNS d'`appartfinder.fr` : registrar externe (lequel : à préciser avant M1)
+- Téléphone de test : Samsung Galaxy A06, Android 15 (ABI à confirmer via `adb shell getprop ro.product.cpu.abi`)
+
 ## Règles de travail
 
 - Français pour les échanges, la doc et les textes d'UI. Anglais pour le code, les identifiants, les commits et les noms de fichiers.

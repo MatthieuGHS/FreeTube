@@ -1,0 +1,18 @@
+# Secrets
+.env
+*.pem
+*.jks
+*.keystore
+
+# Android / Gradle
+.gradle/
+build/
+local.properties
+.kotlin/
+*.apk
+*.aab
+
+# IDE
+.idea/
+*.iml
+.DS_Store
