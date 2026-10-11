@@ -36,6 +36,6 @@ App Android (YouTube → audio → S3 + lecteur) et site web perso. **Source de 
 | Image (racine du dépôt) | `docker build --platform linux/arm64 -f server/Dockerfile .` (la prod est en arm64 ; BuildKit requis pour `$BUILDPLATFORM`, donc le plugin buildx) |
 | Tâches serveur | `python -m freetube.hash_password` · `python -m freetube.backup [--restore KEY]` · `python -m freetube.purge` (dans le conteneur, voir `docs/deploy.md`) |
 | Token d'appareil | page web **Appareils** (`/settings/devices`), voir `docs/deploy.md` |
-| Prod | `ssh freetube` (lecture seule sans accord) · déployer : `docs/deploy.md` · console AWS : `docs/infra-setup.md` |
+| Prod | `ssh freetube` (lecture seule sans accord) · déployer : `git push` sur `main` (auto en ≤ 2 min, `journalctl -u freetube-deploy`), détails dans `docs/deploy.md` · console AWS : `docs/infra-setup.md` |
 
 Mettre ce tableau à jour quand une commande change.

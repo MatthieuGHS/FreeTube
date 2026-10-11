@@ -1,0 +1,12 @@
+[Unit]
+Description=FreeTube: deploy origin/main when it moves
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# ubuntu owns the clone and is in the docker group; root would hit git's "dubious ownership" check.
+User=ubuntu
+ExecStart=/home/ubuntu/freetube/infra/auto-deploy.sh
+TimeoutStartSec=30min

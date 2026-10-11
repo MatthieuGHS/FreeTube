@@ -70,6 +70,30 @@ hop limit IMDS n'est pas à 2.
 
 ## Mettre à jour
 
+### Automatiquement (par défaut)
+
+Un `git push` sur `main` suffit. Le timer `freetube-deploy` interroge GitHub toutes les 2 minutes et lance
+`infra/auto-deploy.sh` : `git merge --ff-only`, `docker compose build`, `up -d`, rechargement de Caddy, ménage
+des anciennes images. Un build qui échoue laisse tourner les conteneurs actuels ; ce commit n'est pas retenté,
+le prochain push l'est.
+
+```bash
+journalctl -u freetube-deploy.service -n 30   # « deploying abc1234 » puis « deployed abc1234 »
+cat ~/freetube/.git/freetube-deployed         # dernier commit déployé
+cat ~/freetube/.git/freetube-failed           # présent seulement si le dernier essai a échoué
+```
+
+Installation (une fois, ou après une modification de `infra/systemd/`) : copie des unités comme pour les
+tâches quotidiennes ci-dessous, puis `sudo systemctl enable --now freetube-deploy.timer`.
+Pour suspendre les déploiements : `sudo systemctl stop freetube-deploy.timer`.
+
+Limites :
+- tout push sur `main` part en prod sans tests côté serveur : lancer les tests **avant** de pousser ;
+- quiconque peut pousser sur `main` exécute du code sur l'instance (compte GitHub à protéger, 2FA) ;
+- une modification locale dans `~/freetube` bloque les déploiements (le merge refuse) : `journalctl` le dit.
+
+### À la main
+
 ```bash
 ssh freetube
 cd ~/freetube && git pull
@@ -112,7 +136,7 @@ Installation, ou réinstallation après une modification de `infra/systemd/` :
 ```bash
 sudo cp ~/freetube/infra/systemd/freetube-* /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now freetube-backup.timer freetube-purge.timer
+sudo systemctl enable --now freetube-backup.timer freetube-purge.timer freetube-deploy.timer
 systemctl list-timers 'freetube-*'            # prochaine exécution de chaque timer
 ```
 

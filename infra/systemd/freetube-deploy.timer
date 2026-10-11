@@ -1,0 +1,10 @@
+[Unit]
+Description=FreeTube: poll GitHub for a new main every 2 minutes
+
+[Timer]
+OnBootSec=2min
+# Counted from the end of the previous run: a long build never overlaps the next poll.
+OnUnitInactiveSec=2min
+
+[Install]
+WantedBy=timers.target
