@@ -163,6 +163,7 @@ class MainActivity : ComponentActivity() {
         val destination = current?.destination
         val tab = Tab.entries.firstOrNull { destination.isAt(it.route) }
         val inPlayer = destination.isAt(PlayerRoute)
+        val selectedTab = tab ?: Tab.PLAYLISTS.takeIf { destination?.hasRoute(PlaylistRoute::class) == true }
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -186,15 +187,13 @@ class MainActivity : ComponentActivity() {
                     NavigationBar(containerColor = MaterialTheme.colorScheme.background) {
                         Tab.entries.forEach { entry ->
                             NavigationBarItem(
-                                selected = entry == tab,
+                                selected = entry == selectedTab,
                                 onClick = { nav.openTab(entry) },
-                                icon = { Icon(painterResource(entry.icon), contentDescription = null) },
-                                label = { Text(entry.label, maxLines = 1) },
-                                // Only the selected tab shows its label: "Téléchargements" never fits a fifth of 360dp.
-                                alwaysShowLabel = false,
+                                // Icons only: the top bar already names the page, and French labels truncate with
+                                // a large system font even one at a time. The label stays for screen readers.
+                                icon = { Icon(painterResource(entry.icon), contentDescription = entry.label) },
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = MaterialTheme.colorScheme.primary,
-                                    selectedTextColor = MaterialTheme.colorScheme.primary,
                                 ),
                             )
                         }
