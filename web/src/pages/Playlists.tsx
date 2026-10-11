@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { errorMessage, playlistsQuery, request, savePlaylist, tracksQuery, type Playlist } from "../api/client.ts";
 import { moveRow, removeAt, visibleRows } from "../playlist.ts";
-import { usePlay } from "./Player.tsx";
+import { thumbUrl, usePlay } from "./Player.tsx";
 
 const detailPath = (id: string) => `/playlists/${encodeURIComponent(id)}`;
 
@@ -138,6 +138,7 @@ export function PlaylistDetail() {
           const track = queue[index]!;
           return (
             <li key={row.position} className="row">
+              <img src={thumbUrl(track.video_id)} loading="lazy" alt="" width={64} height={36} />
               <div className="meta">
                 <span className="title">{track.title}</span>
                 <span className="artist">{track.artist}</span>
