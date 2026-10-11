@@ -127,9 +127,9 @@ internal fun downloadRows(jobs: List<Job>, tracks: List<TrackEntity>): List<Down
         val active = videoJobs.filterNot { it.state.isFinished }
         val status = when {
             active.isNotEmpty() -> activeStatus(active)
-            else -> videoJobs.firstOrNull { it.state == WorkInfo.State.FAILED && it.error != null }
-                ?.let { DownloadStatus.Failed(it.error!!) }
-                ?: videoJobs.firstOrNull { it.state == WorkInfo.State.FAILED }?.let { DownloadStatus.Failed(PipelineError.UNKNOWN) }
+            else -> videoJobs.filter { it.state == WorkInfo.State.FAILED }
+                .maxByOrNull { it.error != null } // the step that failed carries the error, its dependent doesn't
+                ?.let { DownloadStatus.Failed(it.error ?: PipelineError.UNKNOWN) }
                 ?: DownloadStatus.NotSent.takeIf { track != null }
         } ?: return@mapNotNull null
         val title = track?.title ?: videoJobs.firstNotNullOfOrNull { it.title }

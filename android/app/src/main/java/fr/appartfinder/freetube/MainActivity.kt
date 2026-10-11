@@ -38,6 +38,7 @@ import fr.appartfinder.freetube.download.DownloadsScreen
 import fr.appartfinder.freetube.download.TrackPipeline
 import fr.appartfinder.freetube.library.LibraryScreen
 import fr.appartfinder.freetube.settings.SettingsScreen
+import fr.appartfinder.freetube.youtube.VideoId
 import fr.appartfinder.freetube.youtube.YoutubeScreen
 import fr.appartfinder.freetube.youtube.YoutubeTarget
 import fr.appartfinder.freetube.youtube.YoutubeWebView
@@ -94,7 +95,7 @@ class MainActivity : ComponentActivity() {
         null -> "Lien YouTube non reconnu"
     }
 
-    private fun download(videoId: fr.appartfinder.freetube.youtube.VideoId): String {
+    private fun download(videoId: VideoId): String {
         pipeline.enqueue(videoId)
         return "Ajouté aux téléchargements"
     }
