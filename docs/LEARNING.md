@@ -326,7 +326,10 @@ aléatoire, répétition et touches multimédia, page Appareils (créer un token
 révoquer). FastAPI sert le build React ; l'image Docker construit le web ; Caddy ajoute une CSP stricte.
 60 tests serveur et 15 tests web verts.
 
-Vérification en prod : à faire après le déploiement.
+Vérifié en prod le 2026-10-12 : token créé sur la page Appareils et collé dans l'app (« Token valide »),
+ancien token révoqué, synchro dans les deux sens, 409 géré, lecture et miniatures malgré la CSP. Un oubli
+trouvé pendant ce test : pas de miniature dans le détail d'une playlist (corrigé). Le déploiement est
+désormais automatique à chaque push (ADR 0008).
 
 ### Concepts
 
