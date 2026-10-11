@@ -239,3 +239,15 @@ select {
   flex: 1 1 12rem;
   width: auto;
 }
+
+.token {
+  margin: 1rem 0;
+  padding: 0.5rem 1rem 1rem;
+  border: 2px solid var(--accent);
+  border-radius: 6px;
+}
+
+.token input {
+  font-family: monospace;
+  margin-bottom: 0.5rem;
+}

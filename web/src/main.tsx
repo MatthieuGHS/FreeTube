@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router";
 import { ApiError, errorMessage, LOGIN_PATH } from "./api/client.ts";
 import { notify } from "./notice.ts";
+import { Devices } from "./pages/Devices.tsx";
 import { Layout } from "./pages/Layout.tsx";
 import { Library } from "./pages/Library.tsx";
 import { Login } from "./pages/Login.tsx";
@@ -18,6 +19,7 @@ const router = createBrowserRouter([
       { index: true, element: <Library /> },
       { path: "playlists", element: <Playlists /> },
       { path: "playlists/:id", element: <PlaylistDetail /> },
+      { path: "settings/devices", element: <Devices /> },
     ],
   },
 ]);
