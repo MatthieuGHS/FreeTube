@@ -176,3 +176,53 @@ Vérifié le 2026-10-10 :
 2. Pourquoi le serveur incrémente-t-il `server_rev` **dans** la transaction d'écriture, et quel bug
    apparaîtrait si on l'incrémentait juste avant, dans une transaction séparée ?
 3. Pourquoi une restauration de sauvegarde ne doit-elle jamais faire reculer `server_rev` ?
+
+---
+
+## M3 — Cœur Android (2026-10-11)
+
+### Ce qui a été construit
+
+L'app Android complète pour télécharger : une WebView YouTube avec un bouton qui suit la page, le partage
+depuis l'app YouTube, la chaîne Téléchargement → Envoi en tâches de fond, la base locale Room, les écrans
+Bibliothèque, Téléchargements et Réglages (token chiffré). Design choisi par une arena pstack (ADR 0004).
+
+Vérifié le 2026-10-11 sur l'A06 : un morceau depuis la WebView et un depuis le partage sont arrivés dans
+la bibliothèque du téléphone **et** sur le serveur (`ready`, audio et miniature dans S3) ; 21 tests JVM
+verts, dont la table complète du classifieur. Trois bugs attrapés en route par les tests et lint :
+message de blocage géographique non reconnu, appel qui exigeait Android 13, sauvegarde Android des données ;
+et un crash au démarrage (icônes système incompatibles avec Compose sur ce Samsung).
+
+### Concepts
+
+- **WorkManager** : exécute des tâches qui survivent à la fermeture de l'app et au redémarrage. Ici, une
+  chaîne unique par morceau (`track-{id}`) : téléchargement puis envoi, avec réessais espacés (backoff).
+- **Travail unique + KEEP** : redemander le même morceau pendant qu'il est en cours ne fait rien ; après un
+  échec, cela relance une chaîne neuve. « Relancer » est donc le même appel que le premier téléchargement.
+- **Faits contre tâches** : Room ne note que ce qui est vrai et durable (le fichier est là, il est envoyé).
+  Ce qui est en train de se passer appartient à WorkManager. L'écran combine les deux au moment de
+  l'affichage : rien ne peut rester « bloqué » après que Samsung a tué l'app.
+- **Service de premier plan (foreground service)** : le téléchargement affiche une notification, ce qui
+  dit à Android que l'utilisateur sait qu'une tâche tourne et qu'il ne faut pas la tuer.
+- **Exclusion mutuelle (`Mutex`)** : un seul accès à la fois au moteur yt-dlp, pour qu'une mise à jour ne
+  remplace jamais ses fichiers pendant qu'un téléchargement les utilise.
+- **Chiffrement avec clé matérielle** : Tink chiffre le token ; sa clé est elle-même protégée par le
+  Keystore d'Android, qui ne la laisse jamais sortir.
+- **Test de contrat** : un test compare les classes Kotlin au fichier `openapi.json` du serveur ; si l'un
+  change sans l'autre, le build échoue.
+
+### Fichiers à lire, dans l'ordre
+
+1. `docs/adr/0004-android-pipeline-room-facts-workmanager-jobs.md`
+2. `android/app/src/main/java/fr/appartfinder/freetube/youtube/YoutubeUrl.kt` (et son test)
+3. `android/app/src/main/java/fr/appartfinder/freetube/download/TrackPipeline.kt`
+4. `android/app/src/main/java/fr/appartfinder/freetube/download/DownloadWorker.kt` puis `UploadWorker.kt`
+5. `android/app/src/main/java/fr/appartfinder/freetube/download/YtDlp.kt`
+
+### Questions de compréhension
+
+1. Samsung tue l'app pendant un téléchargement. Que voit l'écran Téléchargements, et que se passe-t-il
+   ensuite ? Pourquoi aucun état « bloqué » n'est possible ?
+2. Pourquoi les envois vers S3 utilisent-ils un client HTTP différent de celui qui parle au serveur ?
+3. Tu appuies deux fois de suite sur « Télécharger ce morceau ». Combien de téléchargements ont lieu, et
+   grâce à quoi ?
