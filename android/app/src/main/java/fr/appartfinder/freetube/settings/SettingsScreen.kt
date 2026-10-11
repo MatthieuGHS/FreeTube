@@ -24,12 +24,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import fr.appartfinder.freetube.api.ServerClient
 import fr.appartfinder.freetube.download.EngineStatus
 import fr.appartfinder.freetube.download.TrackPipeline
 import fr.appartfinder.freetube.download.YtDlp
 import fr.appartfinder.freetube.sync.SyncDao
+import fr.appartfinder.freetube.sync.requestSync
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -59,6 +61,7 @@ class SettingsViewModel @Inject constructor(
     private val ytDlp: YtDlp,
     private val pipeline: TrackPipeline,
     sync: SyncDao,
+    private val workManager: WorkManager,
 ) : ViewModel() {
     val snapshot: StateFlow<SettingsSnapshot?> = settings.snapshot.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     val lastSyncAt: StateFlow<Long?> = sync.observeState().map { it?.lastSyncAt }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -74,7 +77,7 @@ class SettingsViewModel @Inject constructor(
         _urlError.value = if (settings.setServerUrl(raw)) null else "L'URL doit commencer par https://"
     }
 
-    /** Saves, then checks with GET /api/auth/me. A valid token re-queues the tracks waiting for upload. */
+    /** Saves, then checks with GET /api/auth/me. A valid token re-queues the tracks waiting for upload and syncs. */
     fun saveToken(raw: String) = viewModelScope.launch {
         if (!settings.setToken(raw)) {
             _tokenStatus.value = TokenStatus.INVALID_FORMAT
@@ -84,6 +87,7 @@ class SettingsViewModel @Inject constructor(
         _tokenStatus.value = try {
             serverClient.api()?.me()
             pipeline.retryPendingUploads()
+            workManager.requestSync()
             TokenStatus.VALID
         } catch (e: HttpException) {
             if (e.code() == 401) TokenStatus.REJECTED else TokenStatus.UNREACHABLE
