@@ -10,8 +10,10 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from botocore.exceptions import BotoCoreError, ClientError
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from freetube import auth, routes
 from freetube.config import Settings
@@ -31,6 +33,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.settings = settings
     app.state.storage = Storage(settings.bucket, settings.region)
     app.state.login_limiter = auth.LoginLimiter()
+    app.state.web = StaticFiles(directory=settings.web_dist) if settings.web_dist.is_dir() else None
     yield
 
 
@@ -49,6 +52,29 @@ app.include_router(routes.router)
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+# Registered after every API route, so it only sees paths no API route matched.
+@app.get("/{path:path}", include_in_schema=False)
+async def web(path: str, request: Request) -> Response:
+    """The SPA: a built file, else index.html so client-side routes survive a reload.
+    StaticFiles resolves the path and refuses anything outside web_dist."""
+    files: StaticFiles | None = request.app.state.web
+    if files is None or path == "api" or path.startswith("api/"):
+        raise HTTPException(404, "Not Found")
+    try:
+        response = await files.get_response(path, request.scope)
+    except StarletteHTTPException as exc:
+        if exc.status_code != 404:
+            raise
+        path = "index.html"
+        response = await files.get_response(path, request.scope)
+    # Vite fingerprints everything under assets/; index.html must be revalidated to pick them up.
+    immutable = path.startswith("assets/")
+    response.headers["Cache-Control"] = (
+        "public, max-age=31536000, immutable" if immutable else "no-cache"
+    )
+    return response
 
 
 # One mapping from domain errors to HTTP: routes never build error responses by hand.
