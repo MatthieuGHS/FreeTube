@@ -280,7 +280,8 @@ WebView et partage), et la synchronisation dans les deux sens avec le serveur : 
 le téléphone gagne. Les morceaux connus seulement du serveur apparaissent dans la Bibliothèque et se
 lisent en streaming. Réglages : date de la dernière synchro et « Tout resynchroniser ». 44 tests JVM verts.
 
-Vérification sur l'A06 (scénario du critère de fin) : à faire.
+Vérifié le 2026-10-12 sur l'A06 : migration Room v1 → v2 sans perte, puis une journée d'usage réel
+(playlists, synchro, import) sans bug signalé.
 
 ### Concepts
 
