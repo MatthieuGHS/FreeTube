@@ -313,3 +313,44 @@ Vérifié le 2026-10-12 sur l'A06 : migration Room v1 → v2 sans perte, puis un
 2. Une playlist contient un morceau que le téléphone ne connaît pas encore. Pourquoi est-il masqué
    plutôt que retiré, et que se passerait-il au prochain push s'il était retiré ?
 3. Pourquoi l'UUID d'une playlist importée est-il tiré au moment du clic et pas par le worker ?
+
+---
+
+## M6 — Web (2026-10-12)
+
+### Ce qui a été construit
+
+Le site `https://appartfinder.fr` : connexion, bibliothèque avec recherche, renommage et suppression,
+playlists (créer, réordonner, retirer, renommer, supprimer), lecteur persistant avec file d'attente,
+aléatoire, répétition et touches multimédia, page Appareils (créer un token affiché une seule fois,
+révoquer). FastAPI sert le build React ; l'image Docker construit le web ; Caddy ajoute une CSP stricte.
+60 tests serveur et 15 tests web verts.
+
+Vérification en prod : à faire après le déploiement.
+
+### Concepts
+
+- **SPA et repli** : une seule page HTML ; React affiche la bonne vue selon l'URL. Recharger
+  `/playlists/abc` demande ce chemin au serveur, qui renvoie `index.html`, puis React reprend la main.
+- **Verrouillage optimiste côté web** : chaque écriture envoie `If-Match: <rev>` ; si le serveur a une
+  autre version, il répond 409, le site recharge et prévient.
+- **Cookie `httpOnly`** : le script de la page ne peut pas le lire, mais le navigateur l'envoie quand même.
+- **CSP** : le navigateur refuse tout script qui ne vient pas de notre domaine, et tout envoi de données
+  vers un autre domaine par `fetch`.
+- **Cache et empreintes** : Vite met une empreinte dans le nom des fichiers JS/CSS ; ils sont cachés un an.
+  `index.html` est revalidé à chaque visite, donc un déploiement est vu tout de suite.
+
+### Fichiers à lire, dans l'ordre
+
+1. `docs/adr/0007-web-spa-served-by-fastapi.md`
+2. `server/src/freetube/main.py` (route `web`)
+3. `web/src/api/client.ts` puis `web/src/main.tsx` (politique d'erreurs)
+4. `web/src/player.ts` puis `web/src/pages/Player.tsx`
+5. `web/src/playlist.ts` (et son test)
+
+### Questions de compréhension
+
+1. Pourquoi `/api/inconnu` doit-il rester un 404 JSON et pas renvoyer `index.html` ?
+2. Un script injecté ne peut pas lire le cookie de session. Pourquoi est-ce quand même dangereux, et que
+   change la CSP ?
+3. Tu mets la musique en pause 2 heures sur le web. Que se passe-t-il à la reprise, et pourquoi ?
