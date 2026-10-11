@@ -1,0 +1,12 @@
+# Allowlist: only what the image needs reaches the build context (never .env, android/, .git).
+*
+!server/pyproject.toml
+!server/uv.lock
+!server/src
+!web/package.json
+!web/package-lock.json
+!web/index.html
+!web/tsconfig.json
+!web/vite.config.ts
+!web/src
+**/__pycache__

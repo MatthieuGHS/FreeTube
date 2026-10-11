@@ -1,6 +1,8 @@
 services:
   api:
-    build: ../server
+    build:
+      context: .. # the image builds the web too: the context is the repo root
+      dockerfile: server/Dockerfile
     restart: unless-stopped
     env_file: .env
     volumes:

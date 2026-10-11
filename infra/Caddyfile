@@ -5,6 +5,7 @@ appartfinder.fr {
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "no-referrer"
 		X-Frame-Options "DENY"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' https://freetube-7k3q9x.s3.eu-west-3.amazonaws.com; media-src 'self' https://freetube-7k3q9x.s3.eu-west-3.amazonaws.com; style-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
 		-Server
 	}
 	reverse_proxy api:8000

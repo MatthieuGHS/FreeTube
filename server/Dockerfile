@@ -1,3 +1,14 @@
+# Build context: the repository root (see infra/docker-compose.yml).
+
+# The web build is arch-independent JS: run it natively, not under arm64 emulation.
+FROM --platform=$BUILDPLATFORM node:24-slim AS web
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web ./
+# No gen:api here: src/api/schema.ts is committed.
+RUN npm run build
+
 FROM python:3.14-slim
 
 COPY --from=ghcr.io/astral-sh/uv:0.12.19 /uv /bin/uv
@@ -5,10 +16,12 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_NO_DEV=1 UV_PYTHON_DOWNLOADS=neve
 
 WORKDIR /app
 # Dependencies first: this layer stays cached while only the source changes.
-COPY pyproject.toml uv.lock ./
+COPY server/pyproject.toml server/uv.lock ./
 RUN uv sync --locked --no-install-project
-COPY src ./src
+COPY server/src ./src
 RUN uv sync --locked --no-editable
+# Served by main.py (FREETUBE_WEB_DIST defaults to this path).
+COPY --from=web /web/dist ./web/dist
 
 # Fixed uid so the host data directory can be chowned to match (see docs/deploy.md).
 RUN useradd --system --uid 1000 freetube
