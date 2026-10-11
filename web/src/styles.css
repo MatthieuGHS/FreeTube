@@ -221,3 +221,21 @@ label {
   gap: 0.4rem;
   justify-content: center;
 }
+
+select {
+  padding: 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  font: inherit;
+  color: inherit;
+}
+
+.inline label {
+  flex-basis: 100%;
+}
+
+.inline input:not([type="range"]) {
+  flex: 1 1 12rem;
+  width: auto;
+}

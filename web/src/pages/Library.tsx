@@ -1,7 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { errorMessage, request, tracksQuery, type Track } from "../api/client.ts";
+import { errorMessage, playlistsQuery, request, tracksQuery, type Playlist, type Track } from "../api/client.ts";
+import { notify } from "../notice.ts";
+import { appendItem } from "../playlist.ts";
 import { thumbUrl, usePlay } from "./Player.tsx";
+import { useSavePlaylist } from "./Playlists.tsx";
 
 /** Case- and accent-insensitive, so "beyonce" finds "Beyoncé". */
 const fold = (text: string) =>
@@ -12,6 +15,7 @@ const fold = (text: string) =>
 
 export function Library() {
   const tracks = useQuery(tracksQuery);
+  const playlists = useQuery(playlistsQuery);
   const [search, setSearch] = useState("");
   const play = usePlay();
 
@@ -24,20 +28,29 @@ export function Library() {
   return (
     <>
       <h1>Bibliothèque</h1>
+      {playlists.isError && <p role="alert">Playlists indisponibles : {errorMessage(playlists.error)}</p>}
       <label htmlFor="search">Rechercher (titre ou artiste)</label>
       <input id="search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} />
       {shown.length === 0 && <p>{tracks.data.length === 0 ? "Aucun morceau." : "Aucun résultat."}</p>}
       <ul className="rows">
         {shown.map((track, index) => (
-          <TrackRow key={track.video_id} track={track} onPlay={() => play(shown, index)} />
+          <TrackRow
+            key={track.video_id}
+            track={track}
+            playlists={playlists.data ?? []}
+            onPlay={() => play(shown, index)}
+          />
         ))}
       </ul>
     </>
   );
 }
 
-function TrackRow({ track, onPlay }: { track: Track; onPlay: () => void }) {
+type RowProps = { track: Track; playlists: Playlist[]; onPlay: () => void };
+
+function TrackRow({ track, playlists, onPlay }: RowProps) {
   const queryClient = useQueryClient();
+  const save = useSavePlaylist();
   const [editing, setEditing] = useState(false);
   const invalidate = () => queryClient.invalidateQueries({ queryKey: tracksQuery.queryKey });
   const rename = useMutation({
@@ -93,6 +106,27 @@ function TrackRow({ track, onPlay }: { track: Track; onPlay: () => void }) {
         >
           Supprimer
         </button>
+        {playlists.length > 0 && (
+          <select
+            aria-label={`Ajouter ${track.title} à une playlist`}
+            value=""
+            disabled={save.isPending}
+            onChange={(event) => {
+              const playlist = playlists.find((p) => p.id === event.target.value);
+              if (!playlist) return;
+              const items = appendItem(playlist.items, track.video_id);
+              if (items === null) notify(`Déjà dans « ${playlist.name} »`);
+              else save.mutate({ playlist, change: { items } }, { onSuccess: () => notify(`Ajouté à « ${playlist.name} »`) });
+            }}
+          >
+            <option value="">Ajouter à…</option>
+            {playlists.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
     </li>
   );

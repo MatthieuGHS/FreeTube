@@ -7,13 +7,18 @@ import { notify } from "./notice.ts";
 import { Layout } from "./pages/Layout.tsx";
 import { Library } from "./pages/Library.tsx";
 import { Login } from "./pages/Login.tsx";
+import { PlaylistDetail, Playlists } from "./pages/Playlists.tsx";
 import "./styles.css";
 
 const router = createBrowserRouter([
   { path: "/login", element: <Login /> },
   {
     element: <Layout />,
-    children: [{ index: true, element: <Library /> }],
+    children: [
+      { index: true, element: <Library /> },
+      { path: "playlists", element: <Playlists /> },
+      { path: "playlists/:id", element: <PlaylistDetail /> },
+    ],
   },
 ]);
 

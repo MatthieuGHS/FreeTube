@@ -32,6 +32,7 @@ export function Layout() {
       <header className="top">
         <nav aria-label="Principale">
           <NavLink to="/" end>Bibliothèque</NavLink>
+          <NavLink to="/playlists">Playlists</NavLink>
         </nav>
         <button type="button" onClick={() => logout.mutate()} disabled={logout.isPending}>
           Déconnexion
