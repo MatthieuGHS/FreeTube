@@ -58,6 +58,7 @@ dependencies {
 
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.session)
+    implementation(libs.media3.okhttp)
 
     implementation(libs.youtubedl.library)
     implementation(libs.youtubedl.ffmpeg)
@@ -75,6 +76,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.serialization.json)
     implementation(libs.coil.compose)
+    implementation(libs.coil.okhttp)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockwebserver)

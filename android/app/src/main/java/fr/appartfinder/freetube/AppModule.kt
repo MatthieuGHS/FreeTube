@@ -8,6 +8,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import fr.appartfinder.freetube.api.AuthInterceptor
+import fr.appartfinder.freetube.api.Authed
 import fr.appartfinder.freetube.library.AppDatabase
 import fr.appartfinder.freetube.library.TrackDao
 import kotlinx.serialization.json.Json
@@ -36,6 +38,13 @@ object AppModule {
         .readTimeout(Duration.ofSeconds(60))
         .writeTimeout(Duration.ofSeconds(120)) // audio PUTs on a mobile uplink
         .build()
+
+    /** Base client + the token for the server host: Retrofit, /stream and server thumbnails. */
+    @Provides
+    @Singleton
+    @Authed
+    fun authedOkHttp(base: OkHttpClient, auth: AuthInterceptor): OkHttpClient =
+        base.newBuilder().addInterceptor(auth).build()
 
     @Provides
     @Singleton

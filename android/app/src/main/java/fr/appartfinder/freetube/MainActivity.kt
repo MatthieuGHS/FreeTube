@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +38,9 @@ import dagger.hilt.android.AndroidEntryPoint
 import fr.appartfinder.freetube.download.DownloadsScreen
 import fr.appartfinder.freetube.download.TrackPipeline
 import fr.appartfinder.freetube.library.LibraryScreen
+import fr.appartfinder.freetube.playback.FullPlayer
+import fr.appartfinder.freetube.playback.MiniPlayer
+import fr.appartfinder.freetube.playback.PlayerConnection
 import fr.appartfinder.freetube.settings.SettingsScreen
 import fr.appartfinder.freetube.youtube.VideoId
 import fr.appartfinder.freetube.youtube.YoutubeScreen
@@ -57,6 +61,8 @@ import kotlin.reflect.KClass
 
 @Serializable data object SettingsRoute
 
+@Serializable data object PlayerRoute
+
 /** The one list of tabs: the bottom bar and the NavHost both derive from it. */
 enum class Tab(val route: Any, val label: String, val icon: Int) {
     YOUTUBE(YoutubeRoute, "YouTube", R.drawable.ic_youtube),
@@ -68,6 +74,8 @@ enum class Tab(val route: Any, val label: String, val icon: Int) {
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var pipeline: TrackPipeline
+
+    @Inject lateinit var player: PlayerConnection
 
     /** Text shared from another app, consumed once by the UI. */
     private val sharedText = MutableStateFlow<String?>(null)
@@ -116,24 +124,30 @@ class MainActivity : ComponentActivity() {
             snackbar.showSnackbar(handleShare(text))
         }
         val current by nav.currentBackStackEntryAsState()
+        val playerState by player.state.collectAsState()
         Scaffold(
             bottomBar = {
-                NavigationBar {
-                    Tab.entries.forEach { tab ->
-                        @Suppress("UNCHECKED_CAST")
-                        val selected = current?.destination?.hasRoute(tab.route::class as KClass<Any>) == true
-                        NavigationBarItem(
-                            selected = selected,
-                            onClick = {
-                                nav.navigate(tab.route) {
-                                    popUpTo(nav.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = { Icon(painterResource(tab.icon), contentDescription = null) },
-                            label = { Text(tab.label) },
-                        )
+                Column {
+                    if (current?.destination?.hasRoute(PlayerRoute::class) != true) {
+                        MiniPlayer(playerState, onOpen = { nav.navigate(PlayerRoute) { launchSingleTop = true } }, onToggle = { player.togglePlay() })
+                    }
+                    NavigationBar {
+                        Tab.entries.forEach { tab ->
+                            @Suppress("UNCHECKED_CAST")
+                            val selected = current?.destination?.hasRoute(tab.route::class as KClass<Any>) == true
+                            NavigationBarItem(
+                                selected = selected,
+                                onClick = {
+                                    nav.navigate(tab.route) {
+                                        popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                icon = { Icon(painterResource(tab.icon), contentDescription = null) },
+                                label = { Text(tab.label) },
+                            )
+                        }
                     }
                 }
             },
@@ -148,6 +162,7 @@ class MainActivity : ComponentActivity() {
                 composable<LibraryRoute> { LibraryScreen(hiltViewModel()) }
                 composable<DownloadsRoute> { DownloadsScreen(hiltViewModel()) }
                 composable<SettingsRoute> { SettingsScreen(hiltViewModel()) }
+                composable<PlayerRoute> { FullPlayer(player, playerState) }
             }
         }
     }

@@ -1,11 +1,16 @@
 package fr.appartfinder.freetube.api
 
+import fr.appartfinder.freetube.settings.ServerConfig
 import fr.appartfinder.freetube.settings.Settings
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import retrofit2.create
@@ -14,6 +19,7 @@ import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
 import javax.inject.Inject
+import javax.inject.Qualifier
 import javax.inject.Singleton
 
 // DTOs written by hand from server/openapi.json (brief §7); ContractTest fails when they drift.
@@ -57,26 +63,43 @@ interface FreeTubeApi {
     suspend fun me(): Me
 }
 
+/** Marks the OkHttpClient that carries the device token (to the server host only). */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class Authed
+
+/** Pure: the Bearer goes to the configured server host and nowhere else (S3, i.ytimg.com…). */
+internal fun authorize(request: Request, server: ServerConfig?): Request =
+    if (server != null && request.url.host == server.baseUrl.host) {
+        request.newBuilder().header("Authorization", "Bearer ${server.token.value}").build()
+    } else {
+        request
+    }
+
 /**
- * Builds the API for the CURRENT settings on each call: a URL or token change applies to the next
- * request without any global mutable client. The Bearer exists only on this derived client, so it can
- * never reach S3 (presigned PUTs use the base client). No HTTP logging interceptor: it would print it.
+ * The one place that adds the token, for Retrofit, streaming and thumbnails alike. An application
+ * interceptor runs once per call: on the /stream 302 to S3, OkHttp builds the follow-up itself and drops
+ * the Authorization header when the host changes. No HTTP logging interceptor anywhere: it would print it.
  */
+class AuthInterceptor @Inject constructor(private val settings: Settings) : Interceptor {
+    // shortcut: runBlocking on an OkHttp thread; settings.server() is an in-memory read after the first call.
+    override fun intercept(chain: Interceptor.Chain): Response =
+        chain.proceed(authorize(chain.request(), runBlocking { settings.server() }))
+}
+
+/** Retrofit for the CURRENT base URL: a URL change in Settings applies to the next call. */
 @Singleton
 class ServerClient @Inject constructor(
     private val settings: Settings,
-    private val http: OkHttpClient,
+    @Authed private val http: OkHttpClient,
     private val json: Json,
 ) {
     /** null = no token saved yet. */
     suspend fun api(): FreeTubeApi? {
         val server = settings.server() ?: return null
-        val client = http.newBuilder().addInterceptor { chain ->
-            chain.proceed(chain.request().newBuilder().header("Authorization", "Bearer ${server.token.value}").build())
-        }.build()
         return Retrofit.Builder()
             .baseUrl(server.baseUrl)
-            .client(client)
+            .client(http)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create()

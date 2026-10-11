@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,14 +27,18 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import fr.appartfinder.freetube.playback.PlayerConnection
 import java.io.File
 import javax.inject.Inject
 
 /** The entity is the UI model: a parallel domain class would be a field-by-field copy. null = loading. */
 @HiltViewModel
-class LibraryViewModel @Inject constructor(tracks: TrackDao) : ViewModel() {
+class LibraryViewModel @Inject constructor(tracks: TrackDao, private val player: PlayerConnection) : ViewModel() {
     val tracks: StateFlow<List<TrackEntity>?> =
         tracks.observeAll().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** The whole library becomes the queue, starting at the tapped track. */
+    fun play(index: Int) = tracks.value?.let { player.play(it, index) }
 }
 
 @Composable
@@ -44,15 +50,15 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
             Text("Aucun morceau. Téléchargez-en depuis l'onglet YouTube.")
         }
         else -> LazyColumn(Modifier.fillMaxSize()) {
-            items(tracks!!, key = { it.videoId }) { TrackRow(it) }
+            itemsIndexed(tracks!!, key = { _, track -> track.videoId }) { index, track -> TrackRow(track) { viewModel.play(index) } }
         }
     }
 }
 
 @Composable
-private fun TrackRow(track: TrackEntity) {
+private fun TrackRow(track: TrackEntity, onClick: () -> Unit) {
     Row(
-        Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

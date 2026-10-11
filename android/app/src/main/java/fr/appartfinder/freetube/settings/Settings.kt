@@ -63,6 +63,9 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
             .getPrimitive(RegistryConfiguration.get(), Aead::class.java)
     }
 
+    /** Decrypting on every authenticated request would be wasteful: setters invalidate this. */
+    @Volatile private var cached: ServerConfig? = null
+
     val snapshot: Flow<SettingsSnapshot> = context.settingsStore.data.map {
         SettingsSnapshot(it[SERVER_URL] ?: DEFAULT_SERVER_URL, it[DEVICE_TOKEN] != null)
     }
@@ -71,6 +74,7 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     suspend fun setServerUrl(raw: String): Boolean {
         val url = raw.trim().toHttpUrlOrNull()?.takeIf { it.isHttps } ?: return false
         context.settingsStore.edit { it[SERVER_URL] = url.newBuilder().encodedPath("/").build().toString() }
+        cached = null
         return true
     }
 
@@ -79,11 +83,13 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
         val token = DeviceToken.parse(raw) ?: return false
         val sealed = withContext(Dispatchers.IO) { aead.encrypt(token.value.toByteArray(), TOKEN_AD) }
         context.settingsStore.edit { it[DEVICE_TOKEN] = Base64.encodeToString(sealed, Base64.NO_WRAP) }
+        cached = null
         return true
     }
 
     /** null when no token. If the Keystore key is lost, the token is dropped: the user pastes it again. */
     suspend fun server(): ServerConfig? {
+        cached?.let { return it }
         val prefs = context.settingsStore.data.first()
         val sealed = prefs[DEVICE_TOKEN] ?: return null
         val token = try {
@@ -93,6 +99,6 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
             return null
         }
         val url = (prefs[SERVER_URL] ?: DEFAULT_SERVER_URL).toHttpUrlOrNull() ?: return null
-        return DeviceToken.parse(token)?.let { ServerConfig(url, it) }
+        return DeviceToken.parse(token)?.let { ServerConfig(url, it) }.also { cached = it }
     }
 }
