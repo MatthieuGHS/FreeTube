@@ -19,6 +19,8 @@ export function Player({ state, dispatch }: { state: PlayerState; dispatch: Acti
   const [paused, setPaused] = useState(true);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  // One reload per failure streak: true from an error until audio plays again.
+  const recovering = useRef(false);
   const track = current(state);
   const videoId = track?.video_id;
 
@@ -26,6 +28,7 @@ export function Player({ state, dispatch }: { state: PlayerState; dispatch: Acti
   useEffect(() => {
     const element = audio.current;
     if (!element || videoId === undefined) return;
+    recovering.current = false;
     const src = streamUrl(videoId);
     if (element.getAttribute("src") === src) element.currentTime = 0;
     else element.src = src;
@@ -63,6 +66,29 @@ export function Player({ state, dispatch }: { state: PlayerState; dispatch: Acti
     return () => handlers.forEach(([action]) => navigator.mediaSession.setActionHandler(action, null));
   }, [dispatch]);
 
+  /**
+   * The browser keeps the pre-signed S3 URL it was redirected to; it expires after 1 h, so resuming a long
+   * pause (or seeking) gets a 403. Reloading /stream fetches a fresh 302, then playback resumes where it was.
+   */
+  const onError = () => {
+    const element = audio.current;
+    if (!element || videoId === undefined || recovering.current) {
+      notify("Lecture impossible : morceau introuvable ou serveur injoignable");
+      return;
+    }
+    recovering.current = true;
+    const at = element.currentTime;
+    element.src = streamUrl(videoId);
+    element.addEventListener(
+      "loadedmetadata",
+      () => {
+        element.currentTime = at;
+        element.play().catch(() => notify("Lecture impossible"));
+      },
+      { once: true },
+    );
+  };
+
   const toggle = () => {
     const element = audio.current;
     if (!element || !track) return;
@@ -76,11 +102,12 @@ export function Player({ state, dispatch }: { state: PlayerState; dispatch: Acti
         ref={audio}
         preload="none"
         onPlay={() => setPaused(false)}
+        onPlaying={() => (recovering.current = false)}
         onPause={() => setPaused(true)}
         onTimeUpdate={(event) => setTime(event.currentTarget.currentTime)}
         onDurationChange={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
         onEnded={() => dispatch({ type: "ended" })}
-        onError={() => notify("Lecture impossible : morceau introuvable ou serveur injoignable")}
+        onError={onError}
       />
       <p className="now" aria-live="polite">
         {track ? `${track.title} · ${track.artist}` : "Rien en lecture"}
