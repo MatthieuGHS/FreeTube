@@ -3,6 +3,7 @@ package fr.appartfinder.freetube.download
 import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
+import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -11,6 +12,7 @@ import fr.appartfinder.freetube.api.UploadRequest
 import fr.appartfinder.freetube.api.UploadResponse
 import fr.appartfinder.freetube.library.TrackDao
 import fr.appartfinder.freetube.library.UploadState
+import fr.appartfinder.freetube.sync.requestSync
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
@@ -33,6 +35,7 @@ class UploadWorker @AssistedInject constructor(
     private val tracks: TrackDao,
     private val serverClient: ServerClient,
     private val http: OkHttpClient, // base client: the Bearer can never reach S3
+    private val workManager: WorkManager,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -54,6 +57,7 @@ class UploadWorker @AssistedInject constructor(
                 }
             }
             tracks.markUploaded(id)
+            workManager.requestSync() // the track is now ready server-side: pending edits on it can flow
             Result.success()
         } catch (e: HttpException) {
             outcome(httpError(e.code()))

@@ -1,6 +1,7 @@
 package fr.appartfinder.freetube.library
 
 import androidx.room.withTransaction
+import androidx.work.WorkManager
 import fr.appartfinder.freetube.api.DeletePlaylistPayload
 import fr.appartfinder.freetube.api.DeleteTrackPayload
 import fr.appartfinder.freetube.api.UpdateTrackPayload
@@ -8,6 +9,7 @@ import fr.appartfinder.freetube.api.UpsertPlaylistPayload
 import fr.appartfinder.freetube.download.TrackPipeline
 import fr.appartfinder.freetube.sync.OpType
 import fr.appartfinder.freetube.sync.OutboxOpEntity
+import fr.appartfinder.freetube.sync.requestSync
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -31,6 +33,7 @@ class LibraryWriter @Inject constructor(
     private val db: AppDatabase,
     private val json: Json,
     private val pipeline: TrackPipeline,
+    private val workManager: WorkManager,
 ) {
     private val tracks = db.tracks()
     private val playlists = db.playlists()
@@ -45,7 +48,7 @@ class LibraryWriter @Inject constructor(
 
     /** Full state, created or replaced (playlist import). */
     suspend fun savePlaylist(state: PlaylistState) {
-        db.withTransaction { writePlaylist(state) }
+        transaction { writePlaylist(state) }
     }
 
     suspend fun renamePlaylist(id: String, name: String) {
@@ -71,7 +74,7 @@ class LibraryWriter @Inject constructor(
     }
 
     suspend fun deletePlaylist(id: String) {
-        db.withTransaction {
+        transaction {
             playlists.delete(id)
             enqueue(OpType.DELETE_PLAYLIST, id, json.encodeToString(DeletePlaylistPayload.serializer(), DeletePlaylistPayload(id)))
         }
@@ -80,8 +83,8 @@ class LibraryWriter @Inject constructor(
     suspend fun renameTrack(videoId: String, title: String, artist: String) {
         val cleanTitle = title.trim().take(MAX_TEXT).ifBlank { return }
         val cleanArtist = artist.trim().take(MAX_TEXT).ifBlank { return }
-        db.withTransaction {
-            if (tracks.get(videoId) == null) return@withTransaction
+        transaction {
+            if (tracks.get(videoId) == null) return@transaction
             tracks.rename(videoId, cleanTitle, cleanArtist)
             val payload = UpdateTrackPayload(videoId, cleanTitle, cleanArtist)
             enqueue(OpType.UPDATE_TRACK, videoId, json.encodeToString(UpdateTrackPayload.serializer(), payload))
@@ -91,7 +94,7 @@ class LibraryWriter @Inject constructor(
     /** Row and op first (one transaction), then the files: a crash in between leaves orphan files, never a row without them. */
     suspend fun deleteTrack(videoId: String) {
         pipeline.cancel(videoId) // a running upload would otherwise make the track ready again on the server
-        val track = db.withTransaction {
+        val track = transaction {
             tracks.get(videoId)?.also {
                 tracks.delete(videoId)
                 enqueue(OpType.DELETE_TRACK, videoId, json.encodeToString(DeleteTrackPayload.serializer(), DeleteTrackPayload(videoId)))
@@ -102,8 +105,8 @@ class LibraryWriter @Inject constructor(
 
     /** [edit] gets the current full state inside the transaction; null = nothing to change. */
     private suspend fun editPlaylist(id: String, edit: (PlaylistState) -> PlaylistState?) {
-        db.withTransaction {
-            val playlist = playlists.get(id) ?: return@withTransaction
+        transaction {
+            val playlist = playlists.get(id) ?: return@transaction
             edit(PlaylistState(playlist, playlists.items(id)))?.let { writePlaylist(it) }
         }
     }
@@ -114,6 +117,9 @@ class LibraryWriter @Inject constructor(
         val payload = UpsertPlaylistPayload(p.id, p.name, p.sourceYoutubeId, state.items)
         enqueue(OpType.UPSERT_PLAYLIST, p.id, json.encodeToString(UpsertPlaylistPayload.serializer(), payload))
     }
+
+    /** Sync is requested after the commit: a sync started before it would miss the op until the next trigger. */
+    private suspend fun <T> transaction(block: suspend () -> T): T = db.withTransaction(block).also { workManager.requestSync() }
 
     private suspend fun enqueue(type: OpType, entityId: String, payloadJson: String) =
         sync.enqueue(OutboxOpEntity(UUID.randomUUID().toString(), type, entityId, payloadJson, System.currentTimeMillis()))

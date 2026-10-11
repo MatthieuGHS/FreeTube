@@ -43,9 +43,8 @@ class DownloadWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         val videoId = VideoId.parse(inputData.getString(TrackPipeline.KEY_VIDEO_ID)) ?: return outcome(PipelineError.UNKNOWN)
-        tracks.get(videoId.value)?.let { row ->
-            if (row.localAudioPath?.let(::File)?.isFile == true) return Result.success()
-        }
+        val existing = tracks.get(videoId.value) // a server-only row (from sync) keeps its title, date and state
+        if (existing?.localAudioPath?.let(::File)?.isFile == true) return Result.success()
         try {
             setForeground(foregroundInfo(videoId, title = null, percent = null))
         } catch (e: IllegalStateException) {
@@ -58,14 +57,14 @@ class DownloadWorker @AssistedInject constructor(
             tracks.upsert(
                 TrackEntity(
                     videoId = videoId.value,
-                    title = audio.meta.title,
-                    artist = audio.meta.artist,
+                    title = existing?.title ?: audio.meta.title,
+                    artist = existing?.artist ?: audio.meta.artist,
                     durationS = audio.meta.durationS,
                     format = audio.meta.format,
                     localAudioPath = audio.file.path,
                     localThumbPath = thumb.path,
-                    uploadState = UploadState.PENDING,
-                    addedAt = System.currentTimeMillis(),
+                    uploadState = existing?.uploadState ?: UploadState.PENDING,
+                    addedAt = existing?.addedAt ?: System.currentTimeMillis(),
                 ),
             )
             Result.success()

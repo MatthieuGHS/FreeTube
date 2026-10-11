@@ -34,6 +34,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.work.WorkManager
 import dagger.hilt.android.AndroidEntryPoint
 import fr.appartfinder.freetube.download.DownloadsScreen
 import fr.appartfinder.freetube.download.TrackPipeline
@@ -42,6 +43,8 @@ import fr.appartfinder.freetube.playback.FullPlayer
 import fr.appartfinder.freetube.playback.MiniPlayer
 import fr.appartfinder.freetube.playback.PlayerConnection
 import fr.appartfinder.freetube.settings.SettingsScreen
+import fr.appartfinder.freetube.sync.requestSync
+import fr.appartfinder.freetube.sync.schedulePeriodicSync
 import fr.appartfinder.freetube.youtube.VideoId
 import fr.appartfinder.freetube.youtube.YoutubeScreen
 import fr.appartfinder.freetube.youtube.YoutubeTarget
@@ -77,13 +80,19 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var player: PlayerConnection
 
+    @Inject lateinit var workManager: WorkManager
+
     /** Text shared from another app, consumed once by the UI. */
     private val sharedText = MutableStateFlow<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (savedInstanceState == null) sharedText.value = intent.sharedText()
+        if (savedInstanceState == null) {
+            sharedText.value = intent.sharedText()
+            workManager.schedulePeriodicSync()
+            workManager.requestSync()
+        }
         val webView = YoutubeWebView(this) // created once: survives tab switches (configChanges in manifest)
         setContent { MaterialTheme { App(webView) } }
     }
