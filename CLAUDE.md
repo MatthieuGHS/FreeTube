@@ -31,11 +31,11 @@ App Android (YouTube → audio → S3 + lecteur) et site web perso. **Source de 
 | Zone | Commande |
 |---|---|
 | Serveur (`server/`, uv) | `uv run pytest` · `uv run ruff check` · `uv run ruff format --check` · contrat API : `uv run python -m freetube.export_openapi` (à relancer et commiter après tout changement d'API) |
-| Web (`web/`) | `npm run gen:api` · `npx tsc --noEmit` · `npx eslint .` |
+| Web (`web/`) | `npm run dev` (proxy `/api` → `localhost:8000`) · `npm run gen:api` · `npx tsc --noEmit` · `npx eslint .` · `npm test` · `npm run build` |
 | Android (`android/`) | `export JAVA_HOME=/opt/android-studio/jbr` (le Java 11 système est trop vieux) · `./gradlew testDebugUnitTest lint` · `./gradlew assembleDebug` · `adb install -r app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` |
-| Image (`server/`) | `docker build --platform linux/arm64 .` (la prod est en arm64) |
+| Image (racine du dépôt) | `docker build --platform linux/arm64 -f server/Dockerfile .` (la prod est en arm64 ; BuildKit requis pour `$BUILDPLATFORM`, donc le plugin buildx) |
 | Tâches serveur | `python -m freetube.hash_password` · `python -m freetube.backup [--restore KEY]` · `python -m freetube.purge` (dans le conteneur, voir `docs/deploy.md`) |
-| Token d'appareil (avant M6) | `docs/deploy.md`, section « Créer un token d'appareil » |
+| Token d'appareil | page web **Appareils** (`/settings/devices`), voir `docs/deploy.md` |
 | Prod | `ssh freetube` (lecture seule sans accord) · déployer : `docs/deploy.md` · console AWS : `docs/infra-setup.md` |
 
 Mettre ce tableau à jour quand une commande change.

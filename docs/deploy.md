@@ -8,6 +8,8 @@ Le serveur fait tourner deux conteneurs, définis dans `infra/docker-compose.yml
   puis transmet les requêtes à `api`.
 - **`api`** : FastAPI. Il n'est joignable que par Caddy, sur le réseau Docker interne. Sa base SQLite vit
   sur l'hôte dans `/srv/freetube/data`, et elle survit donc aux reconstructions de l'image.
+  Il sert aussi le site web : l'image construit `web/` (étape Node), puis copie le résultat à côté du
+  serveur. Le contexte de construction est donc la racine du dépôt (`server/Dockerfile`).
 
 ## Premier déploiement
 
@@ -76,6 +78,8 @@ docker image prune -f         # supprime les anciennes images, sinon le disque s
 ```
 
 `up -d --build` ne recrée que les conteneurs qui ont changé. La coupure dure quelques secondes.
+La construction inclut celle du site web (`npm ci` puis `npm run build`) : la première après M6 est donc plus
+longue, ensuite le cache Docker la saute tant que `web/` ne change pas.
 Les migrations de la base s'appliquent seules au démarrage de `api`.
 Si `infra/systemd/` a changé, réinstalle les unités (section suivante).
 
@@ -160,30 +164,24 @@ renomme en `freetube.db.before-restore`.
    début ; les modifications encore en attente sur le téléphone l'emportent toujours.
 5. Quand tout va bien, supprime `/srv/freetube/data/freetube.db.before-restore`.
 
-## Créer un token d'appareil (avant la page web de M6)
+## Créer un token d'appareil
 
-Depuis ton poste, une commande à la fois (le mot de passe est lu sans être affiché ni gardé dans
-l'historique, et le JSON est construit par Python pour supporter tous les caractères) :
+1. Connecte-toi sur https://appartfinder.fr, puis ouvre **Appareils**.
+2. Saisis un nom (par exemple `A06`), puis **Créer un token**.
+3. Le token n'est affiché qu'une fois : **Copier**, puis colle-le dans l'app FreeTube, onglet **Réglages** →
+   **Token d'appareil**. Il disparaît dès que tu quittes la page ; en cas d'oubli, révoque-le et recrée-en un.
 
-```bash
-read -rs PW
-python3 -c 'import json,sys; print(json.dumps({"password": sys.argv[1]}))' "$PW" > /tmp/ft.login; unset PW
-curl https://appartfinder.fr/api/auth/login -s -c /tmp/ft.cookies -o /dev/null -w '%{http_code}\n' -H 'content-type: application/json' -d @/tmp/ft.login
-rm /tmp/ft.login
-curl https://appartfinder.fr/api/devices -s -b /tmp/ft.cookies -H 'content-type: application/json' -d '{"name":"A06"}'
-rm /tmp/ft.cookies
-```
+Révoquer un appareil (téléphone perdu) : même page, **Révoquer**. Il ne peut plus ni lire ni synchroniser.
 
-Le login doit répondre `204`. Le token (champ `"token"`) n'est affiché qu'une fois : colle-le dans
-l'app FreeTube, onglet **Réglages** → **Token d'appareil**.
+Sans le web : `POST /api/devices` avec le cookie de session, comme à l'étape 1 de la section suivante.
 
-## Modifier une playlist sans le web (avant M6)
+## Modifier une playlist en ligne de commande
 
 Sert au test de conflit de M5 : modifier côté serveur une playlist que le téléphone modifie aussi.
 Le serveur applique le verrouillage optimiste du web : chaque écriture envoie le `rev` attendu dans
 l'en-tête `If-Match` et un `PUT` remplace **tout** l'état de la playlist (nom, morceaux, source).
 
-1. Se connecter (même procédure que pour le token d'appareil, le cookie reste dans `/tmp/ft.cookies`) :
+1. Se connecter (le mot de passe est lu sans être affiché ni gardé dans l'historique ; le cookie reste dans `/tmp/ft.cookies`) :
 
    ```bash
    read -rs PW
