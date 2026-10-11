@@ -1,22 +1,27 @@
 package fr.appartfinder.freetube.library
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,8 +29,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -33,8 +40,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
+import fr.appartfinder.freetube.R
 import fr.appartfinder.freetube.playback.PlayerConnection
 import fr.appartfinder.freetube.settings.Settings
+import fr.appartfinder.freetube.ui.EmptyState
+import fr.appartfinder.freetube.ui.IconAction
+import fr.appartfinder.freetube.ui.MenuAction
+import fr.appartfinder.freetube.ui.OverflowMenu
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -61,22 +73,37 @@ fun PlaylistsScreen(viewModel: PlaylistsViewModel, onOpen: (String) -> Unit) {
     Box(Modifier.fillMaxSize()) {
         when {
             playlists == null -> Unit
-            playlists!!.isEmpty() -> Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                Text("Aucune playlist. Créez-en une, ou importez-en une depuis l'onglet YouTube.")
-            }
-            else -> LazyColumn(Modifier.fillMaxSize()) {
+            playlists!!.isEmpty() -> EmptyState(
+                R.drawable.ic_list_music, "Aucune playlist. Créez-en une, ou importez-en une depuis YouTube.", Modifier.fillMaxSize(),
+            )
+            // Bottom padding: the last row must scroll clear of the FAB.
+            else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
                 items(playlists!!, key = { it.id }) { playlist ->
-                    Text(
-                        playlist.name,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth().clickable { onOpen(playlist.id) }.padding(horizontal = 16.dp, vertical = 16.dp),
-                    )
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 64.dp).clickable { onOpen(playlist.id) }.padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            Modifier.size(40.dp).clip(MaterialTheme.shapes.small).background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(painterResource(R.drawable.ic_list_music), null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        Text(
+                            playlist.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             }
         }
-        ExtendedFloatingActionButton(onClick = { creating = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)) {
-            Text("Nouvelle playlist")
-        }
+        ExtendedFloatingActionButton(
+            text = { Text("Nouvelle playlist") },
+            icon = { Icon(painterResource(R.drawable.ic_plus), null) },
+            onClick = { creating = true },
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+        )
     }
     if (creating) {
         TextFieldsDialog("Nouvelle playlist", listOf("Nom"), listOf(""), onConfirm = { viewModel.create(it.single()) }, onDismiss = { creating = false })
@@ -137,24 +164,37 @@ fun PlaylistScreen(viewModel: PlaylistViewModel, onDeleted: () -> Unit) {
     var renaming by rememberSaveable { mutableStateOf(false) }
     var deleting by rememberSaveable { mutableStateOf(false) }
     val current = detail ?: return
-    Column(Modifier.fillMaxSize()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(current.playlist.name, style = MaterialTheme.typography.titleLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = { viewModel.play(0) }, enabled = current.rows.isNotEmpty()) { Text("Lire") }
-                TextButton(onClick = { renaming = true }) { Text("Renommer") }
-                TextButton(onClick = { deleting = true }) { Text("Supprimer") }
-            }
-            if (current.hidden > 0) {
-                Text("${current.hidden} morceau(x) pas encore disponible(s) sur ce téléphone", style = MaterialTheme.typography.bodySmall)
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
+        item {
+            Column(Modifier.padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp)) {
+                Text(current.playlist.name, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(end = 12.dp))
+                Text(trackCount(current.rows.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (current.hidden > 0) {
+                    Text("${current.hidden} morceau(x) pas encore disponible(s) sur ce téléphone",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Row(Modifier.padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Button(onClick = { viewModel.play(0) }, enabled = current.rows.isNotEmpty(), shape = MaterialTheme.shapes.small) {
+                        Icon(painterResource(R.drawable.ic_play), null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Lire")
+                    }
+                    Spacer(Modifier.weight(1f))
+                    IconAction(R.drawable.ic_pencil, "Renommer la playlist") { renaming = true }
+                    IconAction(R.drawable.ic_trash_2, "Supprimer la playlist") { deleting = true }
+                }
             }
         }
-        LazyColumn(Modifier.fillMaxSize()) {
-            itemsIndexed(current.rows, key = { _, row -> row.position }) { index, row ->
-                TrackRow(row.track, server, onClick = { viewModel.play(index) }) {
-                    GlyphButton("↑", "Monter", enabled = index > 0) { viewModel.move(index, -1) }
-                    GlyphButton("↓", "Descendre", enabled = index < current.rows.lastIndex) { viewModel.move(index, +1) }
-                    GlyphButton("✕", "Retirer de la playlist") { viewModel.remove(row) }
+        if (current.rows.isEmpty()) {
+            item { EmptyState(R.drawable.ic_list_music, "Cette playlist est vide. Ajoutez des morceaux depuis la Bibliothèque.") }
+        }
+        itemsIndexed(current.rows, key = { _, row -> row.position }) { index, row ->
+            TrackRow(row.track, server, onClick = { viewModel.play(index) }) {
+                OverflowMenu("Options du morceau") { close ->
+                    MenuAction("Monter", R.drawable.ic_arrow_up, enabled = index > 0) { close(); viewModel.move(index, -1) }
+                    MenuAction("Descendre", R.drawable.ic_arrow_down, enabled = index < current.rows.lastIndex) { close(); viewModel.move(index, +1) }
+                    MenuAction("Retirer de la playlist", R.drawable.ic_x, destructive = true) { close(); viewModel.remove(row) }
                 }
             }
         }
@@ -169,7 +209,4 @@ fun PlaylistScreen(viewModel: PlaylistViewModel, onDeleted: () -> Unit) {
     }
 }
 
-@Composable
-private fun GlyphButton(glyph: String, description: String, enabled: Boolean = true, onClick: () -> Unit) {
-    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.semantics { contentDescription = description }) { Text(glyph) }
-}
+private fun trackCount(n: Int) = if (n <= 1) "$n morceau" else "$n morceaux"

@@ -3,6 +3,8 @@ package fr.appartfinder.freetube.library
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,7 +36,7 @@ internal fun TextFieldsDialog(
         confirmButton = {
             TextButton(onClick = { onConfirm(values.toList()); onDismiss() }, enabled = values.all(String::isNotBlank)) { Text("Enregistrer") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
+        dismissButton = { CancelButton(onDismiss) },
     )
 }
 
@@ -45,6 +47,12 @@ internal fun ConfirmDialog(title: String, message: String, onConfirm: () -> Unit
         title = { Text(title) },
         text = { Text(message) },
         confirmButton = { TextButton(onClick = { onConfirm(); onDismiss() }) { Text("Supprimer") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
+        dismissButton = { CancelButton(onDismiss) },
     )
+}
+
+/** Cancel stays neutral so the accent marks only the confirming action. */
+@Composable
+internal fun CancelButton(onDismiss: () -> Unit) {
+    TextButton(onClick = onDismiss, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) { Text("Annuler") }
 }

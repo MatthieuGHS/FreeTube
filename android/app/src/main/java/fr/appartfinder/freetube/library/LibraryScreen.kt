@@ -2,24 +2,21 @@ package fr.appartfinder.freetube.library
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,17 +24,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import coil3.compose.AsyncImage
 import dagger.hilt.android.lifecycle.HiltViewModel
+import fr.appartfinder.freetube.R
 import fr.appartfinder.freetube.playback.PlayerConnection
 import fr.appartfinder.freetube.settings.Settings
+import fr.appartfinder.freetube.ui.Artwork
+import fr.appartfinder.freetube.ui.EmptyState
+import fr.appartfinder.freetube.ui.MenuAction
+import fr.appartfinder.freetube.ui.OverflowMenu
+import fr.appartfinder.freetube.ui.tabular
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -82,19 +85,25 @@ private sealed interface TrackDialog {
 }
 
 @Composable
-fun LibraryScreen(viewModel: LibraryViewModel) {
+fun LibraryScreen(viewModel: LibraryViewModel, onBrowse: () -> Unit) {
     val tracks by viewModel.tracks.collectAsStateWithLifecycle()
     val server by viewModel.server.collectAsStateWithLifecycle()
     var dialog by remember { mutableStateOf<TrackDialog?>(null) }
     when {
         tracks == null -> Unit
-        tracks!!.isEmpty() -> Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-            Text("Aucun morceau. Téléchargez-en depuis l'onglet YouTube.")
-        }
+        tracks!!.isEmpty() -> EmptyState(
+            R.drawable.ic_library, "Aucun morceau pour l'instant. Téléchargez-en depuis YouTube.",
+            Modifier.fillMaxSize(),
+            action = "Ouvrir YouTube" to onBrowse,
+        )
         else -> LazyColumn(Modifier.fillMaxSize()) {
             itemsIndexed(tracks!!, key = { _, track -> track.videoId }) { index, track ->
                 TrackRow(track, server, onClick = { viewModel.play(index) }) {
-                    TrackMenu(onSelect = { dialog = it(track) })
+                    OverflowMenu("Options du morceau") { close ->
+                        MenuAction("Ajouter à une playlist", R.drawable.ic_list_plus) { close(); dialog = TrackDialog.AddTo(track) }
+                        MenuAction("Renommer", R.drawable.ic_pencil) { close(); dialog = TrackDialog.Rename(track) }
+                        MenuAction("Supprimer", R.drawable.ic_trash_2, destructive = true) { close(); dialog = TrackDialog.Delete(track) }
+                    }
                 }
             }
         }
@@ -114,19 +123,6 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
 }
 
 @Composable
-private fun TrackMenu(onSelect: ((TrackEntity) -> TrackDialog) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { open = true }, modifier = Modifier.semantics { contentDescription = "Options du morceau" }) { Text("⋮") }
-        DropdownMenu(open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text("Ajouter à une playlist") }, onClick = { open = false; onSelect(TrackDialog::AddTo) })
-            DropdownMenuItem(text = { Text("Renommer") }, onClick = { open = false; onSelect(TrackDialog::Rename) })
-            DropdownMenuItem(text = { Text("Supprimer") }, onClick = { open = false; onSelect(TrackDialog::Delete) })
-        }
-    }
-}
-
-@Composable
 private fun PlaylistPicker(viewModel: LibraryViewModel, onPick: (String) -> Unit, onDismiss: () -> Unit) {
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     AlertDialog(
@@ -138,41 +134,48 @@ private fun PlaylistPicker(viewModel: LibraryViewModel, onPick: (String) -> Unit
             } else {
                 LazyColumn {
                     items(playlists, key = { it.id }) { playlist ->
-                        Text(
-                            playlist.name,
-                            Modifier.fillMaxWidth().clickable { onPick(playlist.id); onDismiss() }.padding(vertical = 12.dp),
-                        )
+                        Row(
+                            Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(MaterialTheme.shapes.small)
+                                .clickable { onPick(playlist.id); onDismiss() }.padding(horizontal = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(painterResource(R.drawable.ic_list_music), null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(playlist.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 }
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
+        dismissButton = { CancelButton(onDismiss) },
     )
 }
 
-/** Shared by the library and a playlist's detail; [actions] sit at the end of the row. */
+/** Shared by the library and a playlist's detail; [actions] sit at the end of the row. Tapping the row plays. */
 @Composable
 internal fun TrackRow(track: TrackEntity, server: HttpUrl?, onClick: () -> Unit, actions: @Composable RowScope.() -> Unit = {}) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+        Modifier.fillMaxWidth().heightIn(min = 64.dp).clickable(onClick = onClick).padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AsyncImage(
-            // The local file wins; a server-only track loads /thumb through the authed client.
-            model = track.localThumbPath?.let(::File) ?: server?.resolve("api/tracks/${track.videoId}/thumb")?.toString(),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.size(64.dp),
+        // The local file wins; a server-only track loads /thumb through the authed client.
+        Artwork(
+            track.localThumbPath?.let(::File) ?: server?.resolve("api/tracks/${track.videoId}/thumb")?.toString(),
+            Modifier.size(width = 64.dp, height = 36.dp),
         )
         Column(Modifier.weight(1f)) {
-            Text(track.title, style = MaterialTheme.typography.bodyLarge, maxLines = 2)
-            Text("${track.artist} · ${formatDuration(track.durationS)}", style = MaterialTheme.typography.bodySmall)
-            if (track.uploadState == UploadState.PENDING) {
-                Text("Non envoyé", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-            }
+            Text(track.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                if (track.uploadState == UploadState.PENDING) "${track.artist} · Non envoyé" else track.artist,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
+        Text(formatDuration(track.durationS), style = MaterialTheme.typography.bodySmall.tabular, color = MaterialTheme.colorScheme.onSurfaceVariant)
         actions()
     }
 }

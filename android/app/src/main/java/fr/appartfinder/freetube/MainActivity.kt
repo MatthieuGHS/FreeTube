@@ -9,16 +9,24 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -27,7 +35,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.navigation.NavController
+import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -47,6 +58,8 @@ import fr.appartfinder.freetube.playback.MiniPlayer
 import fr.appartfinder.freetube.playback.PlayerConnection
 import fr.appartfinder.freetube.settings.SettingsScreen
 import fr.appartfinder.freetube.sync.requestSync
+import fr.appartfinder.freetube.ui.FreeTubeTheme
+import fr.appartfinder.freetube.ui.IconAction
 import fr.appartfinder.freetube.sync.schedulePeriodicSync
 import fr.appartfinder.freetube.youtube.PlaylistId
 import fr.appartfinder.freetube.youtube.VideoId
@@ -76,7 +89,7 @@ import kotlin.reflect.KClass
 enum class Tab(val route: Any, val label: String, val icon: Int) {
     YOUTUBE(YoutubeRoute, "YouTube", R.drawable.ic_youtube),
     LIBRARY(LibraryRoute, "Bibliothèque", R.drawable.ic_library),
-    PLAYLISTS(PlaylistsRoute, "Playlists", R.drawable.ic_playlist),
+    PLAYLISTS(PlaylistsRoute, "Playlists", R.drawable.ic_list_music),
     DOWNLOADS(DownloadsRoute, "Téléchargements", R.drawable.ic_download),
     SETTINGS(SettingsRoute, "Réglages", R.drawable.ic_settings),
 }
@@ -101,7 +114,7 @@ class MainActivity : ComponentActivity() {
             workManager.requestSync()
         }
         val webView = YoutubeWebView(this) // created once: survives tab switches (configChanges in manifest)
-        setContent { MaterialTheme { App(webView) } }
+        setContent { FreeTubeTheme { App(webView) } }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -129,6 +142,7 @@ class MainActivity : ComponentActivity() {
         return "Import de la playlist lancé"
     }
 
+    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     private fun App(webView: YoutubeWebView) {
         val nav = rememberNavController()
@@ -146,27 +160,42 @@ class MainActivity : ComponentActivity() {
         }
         val current by nav.currentBackStackEntryAsState()
         val playerState by player.state.collectAsState()
+        val destination = current?.destination
+        val tab = Tab.entries.firstOrNull { destination.isAt(it.route) }
+        val inPlayer = destination.isAt(PlayerRoute)
         Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text(tab?.label ?: if (inPlayer) "En lecture" else "", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    navigationIcon = {
+                        when {
+                            // A page opened inside YouTube gets the same visible way back as a pushed screen.
+                            tab == Tab.YOUTUBE && webView.canGoBackState -> IconAction(R.drawable.ic_arrow_left, "Retour") { webView.goBack() }
+                            inPlayer -> IconAction(R.drawable.ic_chevron_down, "Fermer le lecteur") { nav.popBackStack() }
+                            tab == null && destination != null -> IconAction(R.drawable.ic_arrow_left, "Retour") { nav.popBackStack() }
+                        }
+                    },
+                )
+            },
             bottomBar = {
                 Column {
-                    if (current?.destination?.hasRoute(PlayerRoute::class) != true) {
-                        MiniPlayer(playerState, onOpen = { nav.navigate(PlayerRoute) { launchSingleTop = true } }, onToggle = { player.togglePlay() })
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    if (!inPlayer) {
+                        MiniPlayer(player, playerState, onOpen = { nav.navigate(PlayerRoute) { launchSingleTop = true } })
                     }
-                    NavigationBar {
-                        Tab.entries.forEach { tab ->
-                            @Suppress("UNCHECKED_CAST")
-                            val selected = current?.destination?.hasRoute(tab.route::class as KClass<Any>) == true
+                    NavigationBar(containerColor = MaterialTheme.colorScheme.background) {
+                        Tab.entries.forEach { entry ->
                             NavigationBarItem(
-                                selected = selected,
-                                onClick = {
-                                    nav.navigate(tab.route) {
-                                        popUpTo(nav.graph.findStartDestination().id) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                                icon = { Icon(painterResource(tab.icon), contentDescription = null) },
-                                label = { Text(tab.label) },
+                                selected = entry == tab,
+                                onClick = { nav.openTab(entry) },
+                                icon = { Icon(painterResource(entry.icon), contentDescription = null) },
+                                label = { Text(entry.label, maxLines = 1) },
+                                // Only the selected tab shows its label: "Téléchargements" never fits a fifth of 360dp.
+                                alwaysShowLabel = false,
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                ),
                             )
                         }
                     }
@@ -174,7 +203,14 @@ class MainActivity : ComponentActivity() {
             },
             snackbarHost = { SnackbarHost(snackbar) },
         ) { padding ->
-            NavHost(nav, startDestination = YoutubeRoute, modifier = Modifier.padding(padding)) {
+            NavHost(
+                nav,
+                startDestination = YoutubeRoute,
+                // Consumed so a screen's imePadding() only adds what the bars do not already cover.
+                modifier = Modifier.padding(padding).consumeWindowInsets(padding),
+                enterTransition = { fadeIn(tween(150)) },
+                exitTransition = { fadeOut(tween(150)) },
+            ) {
                 composable<YoutubeRoute> {
                     YoutubeScreen(
                         webView,
@@ -182,7 +218,7 @@ class MainActivity : ComponentActivity() {
                         onImport = { scope.launch { snackbar.showSnackbar(importPlaylist(it)) } },
                     )
                 }
-                composable<LibraryRoute> { LibraryScreen(hiltViewModel()) }
+                composable<LibraryRoute> { LibraryScreen(hiltViewModel(), onBrowse = { nav.openTab(Tab.YOUTUBE) }) }
                 composable<PlaylistsRoute> { PlaylistsScreen(hiltViewModel()) { nav.navigate(PlaylistRoute(it)) } }
                 composable<PlaylistRoute> { PlaylistScreen(hiltViewModel(), onDeleted = { nav.popBackStack() }) }
                 composable<DownloadsRoute> { DownloadsScreen(hiltViewModel()) }
@@ -191,4 +227,13 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
+
+@Suppress("UNCHECKED_CAST")
+private fun NavDestination?.isAt(route: Any) = this?.hasRoute(route::class as KClass<Any>) == true
+
+private fun NavController.openTab(tab: Tab) = navigate(tab.route) {
+    popUpTo(graph.findStartDestination().id) { saveState = true }
+    launchSingleTop = true
+    restoreState = true
 }
