@@ -73,7 +73,7 @@ hop limit IMDS n'est pas à 2.
 ### Automatiquement (par défaut)
 
 Un `git push` sur `main` suffit. Le timer `freetube-deploy` interroge GitHub toutes les 2 minutes et lance
-`infra/auto-deploy.sh` : `git merge --ff-only`, `docker compose build`, `up -d`, rechargement de Caddy, ménage
+`infra/auto-deploy.sh` : `git merge --ff-only`, `docker compose build`, `up -d`, recréation de Caddy si le Caddyfile a changé, ménage
 des anciennes images. Un build qui échoue laisse tourner les conteneurs actuels ; ce commit n'est pas retenté,
 le prochain push l'est.
 

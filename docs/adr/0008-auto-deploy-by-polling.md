@@ -15,7 +15,7 @@ suffise. Le dépôt GitHub est public, l'instance n'expose que 80/443, et 22 est
 | Déclencheur | Timer systemd toutes les 2 min, `git fetch` du dépôt public | Webhook GitHub : un endpoint public de plus et un secret à gérer. GitHub Actions + SSH : ouvrir 22 à GitHub et stocker une clé privée chez eux |
 | Suivi | `.git/freetube-deployed` = dernier commit **déployé** ; `.git/freetube-failed` = commit dont le build a échoué, pas retenté | Comparer à `HEAD` : un build raté passerait pour déployé |
 | Échec | `docker compose build` avant `up -d` : un build raté laisse tourner l'ancienne version | `up -d --build` en une commande : même effet, mais moins lisible dans les logs |
-| Caddy | `caddy reload` après chaque déploiement | `up -d` seul : ne voit pas un Caddyfile modifié (montage) |
+| Caddy | Conteneur recréé quand `infra/Caddyfile` a changé depuis le dernier déploiement | `caddy reload` : un montage de fichier unique garde l'ancien fichier, que `git merge` a remplacé (constaté au premier déploiement) |
 | Script modifié par le merge | Corps dans une fonction appelée en dernière ligne | Script lu au fil de l'eau : le merge pourrait le casser en pleine exécution |
 | Disque | `image prune` et `builder prune` (> 7 jours) après chaque déploiement | Rien : 20 Gio remplis en quelques mois |
 
