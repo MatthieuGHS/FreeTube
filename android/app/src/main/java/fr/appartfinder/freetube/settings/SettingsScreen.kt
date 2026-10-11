@@ -2,12 +2,18 @@ package fr.appartfinder.freetube.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -20,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -27,6 +34,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import fr.appartfinder.freetube.R
 import fr.appartfinder.freetube.api.ServerClient
 import fr.appartfinder.freetube.download.EngineStatus
 import fr.appartfinder.freetube.download.TrackPipeline
@@ -119,34 +127,56 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
     var token by remember { mutableStateOf("") } // never pre-filled, never saved across recreation
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
-        Text("Serveur", style = MaterialTheme.typography.titleMedium)
-        OutlinedTextField(url, { url = it }, label = { Text("URL du serveur") }, isError = urlError != null,
-            supportingText = urlError?.let { { Text(it) } }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        Button(onClick = { viewModel.saveServerUrl(url) }) { Text("Enregistrer l'URL") }
-
-        Text("Token d'appareil", style = MaterialTheme.typography.titleMedium)
-        Text(if (current.hasToken) "Un token est enregistré" else "Aucun token enregistré", style = MaterialTheme.typography.bodySmall)
-        OutlinedTextField(token, { token = it }, label = { Text("Coller le token") }, singleLine = true,
-            visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-        Button(onClick = { viewModel.saveToken(token); token = "" }, enabled = token.isNotBlank()) { Text("Enregistrer le token") }
-        tokenStatus.label?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-
-        Text("Synchronisation", style = MaterialTheme.typography.titleMedium)
-        Text("Dernière synchro : ${lastSyncAt?.let { DateFormat.getDateTimeInstance().format(Date(it)) } ?: "jamais"}", style = MaterialTheme.typography.bodySmall)
-        // After a server restore (docs/deploy.md): the next pull re-reads everything, pending edits still win.
-        OutlinedButton(onClick = viewModel::resyncAll) { Text("Tout resynchroniser") }
-
-        Text("Moteur de téléchargement", style = MaterialTheme.typography.titleMedium)
-        Text("Version : ${engine.version ?: "jamais mis à jour"}", style = MaterialTheme.typography.bodySmall)
-        engine.checkedAtMs?.let {
-            Text("Dernière vérification : ${DateFormat.getDateTimeInstance().format(Date(it))}", style = MaterialTheme.typography.bodySmall)
+        Section("Serveur") {
+            OutlinedTextField(url, { url = it }, label = { Text("URL du serveur") }, isError = urlError != null,
+                supportingText = urlError?.let { { Text(it) } }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            FilledTonalButton(onClick = { viewModel.saveServerUrl(url) }, shape = MaterialTheme.shapes.small) { Text("Enregistrer l'URL") }
         }
-        engine.lastError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-        Button(onClick = viewModel::updateEngine, enabled = !engine.updating) {
-            Text(if (engine.updating) "Mise à jour…" else "Mettre à jour le moteur")
+
+        Section("Token d'appareil") {
+            Helper(if (current.hasToken) "Un token est enregistré" else "Aucun token enregistré")
+            OutlinedTextField(token, { token = it }, label = { Text("Coller le token") }, singleLine = true,
+                visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+            FilledTonalButton(onClick = { viewModel.saveToken(token); token = "" }, enabled = token.isNotBlank(), shape = MaterialTheme.shapes.small) {
+                Text("Enregistrer le token")
+            }
+            tokenStatus.label?.let { Helper(it) }
+        }
+
+        Section("Synchronisation") {
+            Helper("Dernière synchro : ${lastSyncAt?.let { DateFormat.getDateTimeInstance().format(Date(it)) } ?: "jamais"}")
+            // After a server restore (docs/deploy.md): the next pull re-reads everything, pending edits still win.
+            OutlinedButton(onClick = viewModel::resyncAll, shape = MaterialTheme.shapes.small) { ButtonIcon(); Text("Tout resynchroniser") }
+        }
+
+        Section("Moteur de téléchargement") {
+            Helper("Version : ${engine.version ?: "jamais mis à jour"}")
+            engine.checkedAtMs?.let { Helper("Dernière vérification : ${DateFormat.getDateTimeInstance().format(Date(it))}") }
+            engine.lastError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            OutlinedButton(onClick = viewModel::updateEngine, enabled = !engine.updating, shape = MaterialTheme.shapes.small) {
+                ButtonIcon()
+                Text(if (engine.updating) "Mise à jour…" else "Mettre à jour le moteur")
+            }
         }
     }
+}
+
+@Composable
+private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        content()
+    }
+}
+
+@Composable
+private fun Helper(text: String) = Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+@Composable
+private fun ButtonIcon() {
+    Icon(painterResource(R.drawable.ic_refresh_cw), contentDescription = null, modifier = Modifier.size(18.dp))
+    Spacer(Modifier.width(8.dp))
 }

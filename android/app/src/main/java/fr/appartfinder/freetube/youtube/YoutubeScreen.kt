@@ -11,8 +11,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -21,8 +22,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import fr.appartfinder.freetube.R
+import fr.appartfinder.freetube.ui.MenuAction
 
 const val YOUTUBE_HOME = "https://m.youtube.com/"
 
@@ -68,14 +72,14 @@ fun YoutubeScreen(webView: YoutubeWebView, onDownload: (VideoId) -> Unit, onImpo
         )
         Box(Modifier.align(Alignment.BottomEnd).padding(16.dp)) {
             when (target) {
-                is YoutubeTarget.Track -> ExtendedFloatingActionButton(onClick = { onDownload(target.videoId) }) { Text("Télécharger ce morceau") }
-                is YoutubeTarget.Playlist -> ExtendedFloatingActionButton(onClick = { onImport(target.listId) }) { Text("Télécharger la playlist") }
+                is YoutubeTarget.Track -> DownloadFab("Télécharger ce morceau") { onDownload(target.videoId) }
+                is YoutubeTarget.Playlist -> DownloadFab("Télécharger la playlist") { onImport(target.listId) }
                 is YoutubeTarget.TrackInPlaylist -> {
                     var open by remember(target) { mutableStateOf(false) }
-                    ExtendedFloatingActionButton(onClick = { open = true }) { Text("Télécharger…") }
-                    DropdownMenu(open, onDismissRequest = { open = false }) {
-                        DropdownMenuItem(text = { Text("Ce morceau") }, onClick = { open = false; onDownload(target.videoId) })
-                        DropdownMenuItem(text = { Text("Toute la playlist") }, onClick = { open = false; onImport(target.listId) })
+                    DownloadFab("Télécharger…") { open = true }
+                    DropdownMenu(open, onDismissRequest = { open = false }, shape = MaterialTheme.shapes.medium) {
+                        MenuAction("Ce morceau", R.drawable.ic_music) { open = false; onDownload(target.videoId) }
+                        MenuAction("Toute la playlist", R.drawable.ic_list_music) { open = false; onImport(target.listId) }
                     }
                 }
                 null -> Unit
@@ -83,3 +87,13 @@ fun YoutubeScreen(webView: YoutubeWebView, onDownload: (VideoId) -> Unit, onImpo
         }
     }
 }
+
+/** The one primary action of the tab, in the accent. */
+@Composable
+private fun DownloadFab(label: String, onClick: () -> Unit) = ExtendedFloatingActionButton(
+    text = { Text(label) },
+    icon = { Icon(painterResource(R.drawable.ic_download), contentDescription = null) },
+    onClick = onClick,
+    containerColor = MaterialTheme.colorScheme.primary,
+    contentColor = MaterialTheme.colorScheme.onPrimary,
+)
