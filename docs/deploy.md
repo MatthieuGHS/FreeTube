@@ -175,3 +175,47 @@ rm /tmp/ft.cookies
 
 Le login doit répondre `204`. Le token (champ `"token"`) n'est affiché qu'une fois : colle-le dans
 l'app FreeTube, onglet **Réglages** → **Token d'appareil**.
+
+## Modifier une playlist sans le web (avant M6)
+
+Sert au test de conflit de M5 : modifier côté serveur une playlist que le téléphone modifie aussi.
+Le serveur applique le verrouillage optimiste du web : chaque écriture envoie le `rev` attendu dans
+l'en-tête `If-Match` et un `PUT` remplace **tout** l'état de la playlist (nom, morceaux, source).
+
+1. Se connecter (même procédure que pour le token d'appareil, le cookie reste dans `/tmp/ft.cookies`) :
+
+   ```bash
+   read -rs PW
+   python3 -c 'import json,sys; print(json.dumps({"password": sys.argv[1]}))' "$PW" > /tmp/ft.login; unset PW
+   curl https://appartfinder.fr/api/auth/login -s -c /tmp/ft.cookies -o /dev/null -w '%{http_code}\n' -H 'content-type: application/json' -d @/tmp/ft.login
+   rm /tmp/ft.login
+   ```
+
+   Le login doit répondre `204`.
+
+2. Lister les playlists et noter l'`id`, le `rev` et les `items` de celle à modifier :
+
+   ```bash
+   curl https://appartfinder.fr/api/playlists -s -b /tmp/ft.cookies | python3 -m json.tool
+   ```
+
+3. Écrire l'état complet voulu dans `/tmp/ft.playlist` (ici : renommer et retirer le dernier morceau).
+   Remplace `ID` par l'`id` noté :
+
+   ```bash
+   curl https://appartfinder.fr/api/playlists -s -b /tmp/ft.cookies | python3 -c '
+   import json, sys
+   p = next(p for p in json.load(sys.stdin) if p["id"] == sys.argv[1])
+   print(json.dumps({"name": p["name"] + " (web)", "items": p["items"][:-1], "source_youtube_id": p["source_youtube_id"]}))
+   ' ID > /tmp/ft.playlist
+   ```
+
+4. Envoyer, avec le `rev` noté à l'étape 2 à la place de `REV` :
+
+   ```bash
+   curl -X PUT https://appartfinder.fr/api/playlists/ID -s -b /tmp/ft.cookies -w '\n%{http_code}\n' -H 'content-type: application/json' -H 'If-Match: REV' -d @/tmp/ft.playlist
+   rm /tmp/ft.playlist /tmp/ft.cookies
+   ```
+
+   `200` renvoie la playlist avec son nouveau `rev`. `409` : la playlist a changé depuis l'étape 2
+   (une synchro du téléphone, par exemple), recommence à l'étape 2. `428` : l'en-tête `If-Match` manque.
