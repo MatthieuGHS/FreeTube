@@ -267,3 +267,48 @@ fichier local a été supprimé (le serveur a répondu 302 vers S3 au `/stream` 
 2. Que se passerait-il si le token était ajouté à toutes les requêtes du client OkHttp, S3 compris ?
 3. Tu mets la lecture en pause 2 heures sur un morceau en streaming (URL S3 valable 1 h). Pourquoi la
    reprise fonctionne-t-elle quand même ?
+
+---
+
+## M5 — Playlists et synchro (2026-10-11)
+
+### Ce qui a été construit
+
+Les playlists sur le téléphone (créer, renommer, réordonner, ajouter ou retirer un morceau, supprimer),
+le renommage et la suppression d'un morceau, l'import d'une playlist YouTube en copie figée (bouton de la
+WebView et partage), et la synchronisation dans les deux sens avec le serveur : outbox, `SyncWorker`,
+le téléphone gagne. Les morceaux connus seulement du serveur apparaissent dans la Bibliothèque et se
+lisent en streaming. Réglages : date de la dernière synchro et « Tout resynchroniser ». 44 tests JVM verts.
+
+Vérification sur l'A06 (scénario du critère de fin) : à faire.
+
+### Concepts
+
+- **Outbox** : la liste des modifications pas encore confirmées par le serveur. Elle est écrite dans la
+  même transaction que la modification elle-même : impossible d'avoir l'une sans l'autre.
+- **Fusion de l'outbox** : une nouvelle opération sur un élément remplace les anciennes, parce que chaque
+  opération décrit l'état complet voulu (toute la playlist, titre et artiste).
+- **Identifiant d'opération (`opId`) et idempotence** : le serveur ignore un `opId` déjà traité. Renvoyer
+  un lot après une coupure ne fait donc rien de plus. Une op remplacée prend un nouvel `opId`, pour
+  qu'un acquittement de l'ancienne ne l'efface pas.
+- **Curseur de synchro** : le plus grand `rev` déjà reçu. Le pull demande « tout ce qui a changé depuis ».
+- **Le téléphone gagne** : le pull ne touche pas un élément qui a encore une op en attente ; le push
+  suivant écrasera la version du serveur.
+- **Transaction comme frontière** : l'ensemble des ops en attente est lu dans la transaction qui applique
+  le pull. Une modification faite pendant l'appel réseau est donc vue, et protégée.
+
+### Fichiers à lire, dans l'ordre
+
+1. `docs/adr/0006-phone-outbox-and-pull-merge.md`
+2. `android/app/src/main/java/fr/appartfinder/freetube/sync/Outbox.kt` (et `OutboxMergeTest`)
+3. `android/app/src/main/java/fr/appartfinder/freetube/library/LibraryWriter.kt`
+4. `android/app/src/main/java/fr/appartfinder/freetube/sync/PullMerge.kt` (et `PullMergeTest`)
+5. `android/app/src/main/java/fr/appartfinder/freetube/sync/SyncWorker.kt`
+
+### Questions de compréhension
+
+1. Tu réordonnes une playlist pendant qu'une synchro envoie la version précédente. Pourquoi ta dernière
+   version n'est-elle pas perdue quand le serveur répond 200 ?
+2. Une playlist contient un morceau que le téléphone ne connaît pas encore. Pourquoi est-il masqué
+   plutôt que retiré, et que se passerait-il au prochain push s'il était retiré ?
+3. Pourquoi l'UUID d'une playlist importée est-il tiré au moment du clic et pas par le worker ?
