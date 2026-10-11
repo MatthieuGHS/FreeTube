@@ -59,10 +59,10 @@ import kotlin.reflect.KClass
 
 /** The one list of tabs: the bottom bar and the NavHost both derive from it. */
 enum class Tab(val route: Any, val label: String, val icon: Int) {
-    YOUTUBE(YoutubeRoute, "YouTube", android.R.drawable.ic_menu_view),
-    LIBRARY(LibraryRoute, "Bibliothèque", android.R.drawable.ic_menu_agenda),
-    DOWNLOADS(DownloadsRoute, "Téléchargements", android.R.drawable.stat_sys_download_done),
-    SETTINGS(SettingsRoute, "Réglages", android.R.drawable.ic_menu_preferences),
+    YOUTUBE(YoutubeRoute, "YouTube", R.drawable.ic_youtube),
+    LIBRARY(LibraryRoute, "Bibliothèque", R.drawable.ic_library),
+    DOWNLOADS(DownloadsRoute, "Téléchargements", R.drawable.ic_download),
+    SETTINGS(SettingsRoute, "Réglages", R.drawable.ic_settings),
 }
 
 @AndroidEntryPoint
