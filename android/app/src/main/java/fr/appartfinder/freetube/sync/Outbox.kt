@@ -65,6 +65,10 @@ interface SyncDao {
     @Upsert
     suspend fun saveState(state: SyncStateEntity)
 
+    /** Next pull starts from 0: after a server restore that lost the old base, server_rev can fall below our cursor. */
+    @Query("DELETE FROM sync_state")
+    suspend fun resetCursor()
+
     @Transaction
     suspend fun enqueue(op: OutboxOpEntity) {
         val pending = outbox()

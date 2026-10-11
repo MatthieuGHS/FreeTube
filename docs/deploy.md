@@ -156,7 +156,8 @@ renomme en `freetube.db.before-restore`.
    Limite : les modifications que le serveur avait reçues **après** la sauvegarde sont perdues côté
    serveur, même si le téléphone les a encore. Le téléphone ne les renverra que s'il les modifie de
    nouveau. Si l'ancienne base est perdue elle aussi (disque mort), il faut remettre à zéro le curseur
-   de synchro du téléphone (procédure décrite en M5).
+   de synchro du téléphone : Réglages, « Tout resynchroniser ». Le prochain pull relit tout depuis le
+   début ; les modifications encore en attente sur le téléphone l'emportent toujours.
 5. Quand tout va bien, supprime `/srv/freetube/data/freetube.db.before-restore`.
 
 ## Créer un token d'appareil (avant la page web de M6)

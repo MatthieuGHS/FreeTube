@@ -9,6 +9,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -60,7 +61,7 @@ class SettingsViewModel @Inject constructor(
     private val serverClient: ServerClient,
     private val ytDlp: YtDlp,
     private val pipeline: TrackPipeline,
-    sync: SyncDao,
+    private val sync: SyncDao,
     private val workManager: WorkManager,
 ) : ViewModel() {
     val snapshot: StateFlow<SettingsSnapshot?> = settings.snapshot.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -94,6 +95,11 @@ class SettingsViewModel @Inject constructor(
         } catch (e: IOException) {
             TokenStatus.UNREACHABLE
         }
+    }
+
+    fun resyncAll() = viewModelScope.launch {
+        sync.resetCursor()
+        workManager.requestSync()
     }
 
     /** Errors are shown through [engine] (lastError). */
@@ -130,6 +136,8 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
 
         Text("Synchronisation", style = MaterialTheme.typography.titleMedium)
         Text("Dernière synchro : ${lastSyncAt?.let { DateFormat.getDateTimeInstance().format(Date(it)) } ?: "jamais"}", style = MaterialTheme.typography.bodySmall)
+        // After a server restore (docs/deploy.md): the next pull re-reads everything, pending edits still win.
+        OutlinedButton(onClick = viewModel::resyncAll) { Text("Tout resynchroniser") }
 
         Text("Moteur de téléchargement", style = MaterialTheme.typography.titleMedium)
         Text("Version : ${engine.version ?: "jamais mis à jour"}", style = MaterialTheme.typography.bodySmall)
