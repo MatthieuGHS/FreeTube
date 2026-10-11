@@ -53,6 +53,11 @@ class TrackPipeline @Inject constructor(
             .enqueue()
     }
 
+    /** Track deleted by the user: its chain must not upload it afterwards. */
+    fun cancel(videoId: String) {
+        workManager.cancelUniqueWork("track-$videoId")
+    }
+
     /** After a token is saved: downloaded-but-not-uploaded tracks get (re)queued. */
     suspend fun retryPendingUploads() {
         tracks.pendingUploadIds().mapNotNull(VideoId::parse).forEach(::enqueue)

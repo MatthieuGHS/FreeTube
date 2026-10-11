@@ -11,7 +11,9 @@ import dagger.hilt.components.SingletonComponent
 import fr.appartfinder.freetube.api.AuthInterceptor
 import fr.appartfinder.freetube.api.Authed
 import fr.appartfinder.freetube.library.AppDatabase
+import fr.appartfinder.freetube.library.PlaylistDao
 import fr.appartfinder.freetube.library.TrackDao
+import fr.appartfinder.freetube.sync.SyncDao
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import java.time.Duration
@@ -27,6 +29,12 @@ object AppModule {
 
     @Provides
     fun trackDao(db: AppDatabase): TrackDao = db.tracks()
+
+    @Provides
+    fun playlistDao(db: AppDatabase): PlaylistDao = db.playlists()
+
+    @Provides
+    fun syncDao(db: AppDatabase): SyncDao = db.sync()
 
     @Provides
     fun workManager(@ApplicationContext context: Context): WorkManager = WorkManager.getInstance(context)

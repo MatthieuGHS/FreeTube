@@ -51,6 +51,25 @@ sealed interface UploadResponse {
 @Serializable
 data class Me(val kind: String)
 
+// Outbox op payloads (server *Payload schemas), stored as JSON in OutboxOpEntity.payloadJson.
+
+@Serializable
+data class UpsertPlaylistPayload(
+    val id: String,
+    val name: String,
+    @SerialName("source_youtube_id") val sourceYoutubeId: String?,
+    val items: List<String>,
+)
+
+@Serializable
+data class DeletePlaylistPayload(val id: String)
+
+@Serializable
+data class UpdateTrackPayload(@SerialName("video_id") val videoId: String, val title: String, val artist: String)
+
+@Serializable
+data class DeleteTrackPayload(@SerialName("video_id") val videoId: String)
+
 interface FreeTubeApi {
     @POST("api/tracks/{videoId}/upload")
     suspend fun upload(@Path("videoId") videoId: String, @Body body: UploadRequest): UploadResponse
