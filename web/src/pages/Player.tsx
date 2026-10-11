@@ -1,17 +1,50 @@
 import { createContext, useContext, useEffect, useRef, useState, type ActionDispatch } from "react";
+import {
+  MusicIcon,
+  PauseIcon,
+  PlayIcon,
+  Repeat1Icon,
+  RepeatIcon,
+  ShuffleIcon,
+  SkipBackIcon,
+  SkipForwardIcon,
+} from "../icons.tsx";
 import { notify } from "../notice.ts";
 import { current, type PlayerAction, type PlayerState, type QueueItem } from "../player.ts";
 
 export const PlayContext = createContext<(queue: QueueItem[], index: number) => void>(() => {});
 export const usePlay = () => useContext(PlayContext);
+/** video_id of the track in the player, to mark its row. */
+export const CurrentContext = createContext<string | undefined>(undefined);
+export const useCurrent = () => useContext(CurrentContext);
 
 const streamUrl = (videoId: string) => `/api/tracks/${encodeURIComponent(videoId)}/stream`;
 export const thumbUrl = (videoId: string) => `/api/tracks/${encodeURIComponent(videoId)}/thumb`;
 const REPEAT_LABEL = { off: "Répéter : non", all: "Répéter : tout", one: "Répéter : un" } as const;
 
-function clock(seconds: number): string {
+export function clock(seconds: number): string {
   const s = Math.floor(seconds);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/** 16:9 artwork over a placeholder: a missing thumbnail leaves the music icon visible. */
+export function Thumb({ videoId }: { videoId: string | undefined }) {
+  return (
+    <span className="thumb">
+      <MusicIcon />
+      {videoId !== undefined && (
+        <img
+          key={videoId}
+          src={thumbUrl(videoId)}
+          loading="lazy"
+          alt=""
+          width={64}
+          height={36}
+          onError={(event) => (event.currentTarget.hidden = true)}
+        />
+      )}
+    </span>
+  );
 }
 
 export function Player({ state, dispatch }: { state: PlayerState; dispatch: ActionDispatch<[PlayerAction]> }) {
@@ -109,51 +142,91 @@ export function Player({ state, dispatch }: { state: PlayerState; dispatch: Acti
         onEnded={() => dispatch({ type: "ended" })}
         onError={onError}
       />
-      <p className="now" aria-live="polite">
-        {track ? `${track.title} · ${track.artist}` : "Rien en lecture"}
-      </p>
-      <div className="seek">
-        <span>{clock(time)}</span>
-        <input
-          type="range"
-          aria-label="Position dans le morceau"
-          min={0}
-          max={duration}
-          step={1}
-          value={Math.min(time, duration)}
-          disabled={!track}
-          onChange={(event) => {
-            if (audio.current) audio.current.currentTime = Number(event.target.value);
-          }}
-        />
-        <span>{clock(duration)}</span>
+      <progress className="line" aria-hidden="true" value={time} max={duration || 1} />
+      <div className="np">
+        <Thumb videoId={videoId} />
+        <div className="now" aria-live="polite">
+          {track ? (
+            <>
+              <span className="title" title={track.title}>{track.title}</span>
+              <span className="artist">{track.artist}</span>
+            </>
+          ) : (
+            <span className="muted">Rien en lecture</span>
+          )}
+        </div>
       </div>
-      <div className="controls">
-        <button
-          type="button"
-          aria-label="Aléatoire"
-          aria-pressed={state.shuffle}
-          onClick={() => dispatch({ type: "toggleShuffle", random: Math.random })}
-        >
-          Aléa
-        </button>
-        <button
-          type="button"
-          aria-label="Précédent"
-          disabled={!track}
-          onClick={() => dispatch({ type: "previous", elapsed: audio.current?.currentTime ?? 0 })}
-        >
-          «
-        </button>
-        <button type="button" aria-label={paused ? "Lecture" : "Pause"} disabled={!track} onClick={toggle}>
-          {paused ? "▶" : "❚❚"}
-        </button>
-        <button type="button" aria-label="Suivant" disabled={!track} onClick={() => dispatch({ type: "next" })}>
-          »
-        </button>
-        <button type="button" onClick={() => dispatch({ type: "cycleRepeat" })}>
-          {REPEAT_LABEL[state.repeat]}
-        </button>
+      <div className="transport">
+        <div className="controls">
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Aléatoire"
+            title="Aléatoire"
+            aria-pressed={state.shuffle}
+            onClick={() => dispatch({ type: "toggleShuffle", random: Math.random })}
+          >
+            <ShuffleIcon />
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Précédent"
+            title="Précédent"
+            disabled={!track}
+            onClick={() => dispatch({ type: "previous", elapsed: audio.current?.currentTime ?? 0 })}
+          >
+            <SkipBackIcon />
+          </button>
+          <button type="button" className="play" aria-label={paused ? "Lecture" : "Pause"} disabled={!track} onClick={toggle}>
+            {paused ? (
+              <span className="filled">
+                <PlayIcon />
+              </span>
+            ) : (
+              <PauseIcon />
+            )}
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Suivant"
+            title="Suivant"
+            disabled={!track}
+            onClick={() => dispatch({ type: "next" })}
+          >
+            <SkipForwardIcon />
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label={REPEAT_LABEL[state.repeat]}
+            title={REPEAT_LABEL[state.repeat]}
+            aria-pressed={state.repeat !== "off"}
+            onClick={() => dispatch({ type: "cycleRepeat" })}
+          >
+            {state.repeat === "one" ? <Repeat1Icon /> : <RepeatIcon />}
+          </button>
+        </div>
+        <div className="seek">
+          <span className="time">{clock(time)}</span>
+          <div className="track">
+            <progress aria-hidden="true" value={time} max={duration || 1} />
+            <input
+              type="range"
+              aria-label="Position dans le morceau"
+              min={0}
+              max={duration}
+              step={1}
+              value={Math.min(time, duration)}
+              disabled={!track}
+              onChange={(event) => {
+                if (audio.current) audio.current.currentTime = Number(event.target.value);
+              }}
+            />
+          </div>
+          <span className="time">{clock(duration)}</span>
+        </div>
       </div>
     </footer>
   );

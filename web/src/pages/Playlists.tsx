@@ -2,10 +2,24 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { errorMessage, playlistsQuery, request, savePlaylist, tracksQuery, type Playlist } from "../api/client.ts";
+import {
+  ArrowDownIcon,
+  ArrowLeftIcon,
+  ArrowUpIcon,
+  ChevronRightIcon,
+  ListMusicIcon,
+  PencilIcon,
+  PlayIcon,
+  PlusIcon,
+  Trash2Icon,
+  XIcon,
+} from "../icons.tsx";
 import { moveRow, removeAt, visibleRows } from "../playlist.ts";
-import { thumbUrl, usePlay } from "./Player.tsx";
+import { Empty } from "./Layout.tsx";
+import { clock, Thumb, useCurrent, usePlay } from "./Player.tsx";
 
 const detailPath = (id: string) => `/playlists/${encodeURIComponent(id)}`;
+export const count = (n: number) => `${n} morceau${n > 1 ? "x" : ""}`;
 
 /** PUT, then put the returned playlist (new rev) in the cache at once: a quick second edit must not send the old rev. */
 export function useSavePlaylist() {
@@ -32,34 +46,68 @@ export function Playlists() {
     },
   });
 
-  if (playlists.isPending) return <p>Chargement…</p>;
-  if (playlists.isError) return <p role="alert">{errorMessage(playlists.error)}</p>;
+  if (playlists.isPending) return <p className="status">Chargement…</p>;
+  if (playlists.isError) return <p className="error" role="alert">{errorMessage(playlists.error)}</p>;
   const playable = new Set(tracks.data?.map((t) => t.video_id));
 
   return (
     <>
-      <h1>Playlists</h1>
+      <div className="page-head">
+        <h1>Playlists</h1>
+      </div>
       <form
-        className="inline"
+        className="inline-form"
         onSubmit={(event) => {
           event.preventDefault();
           create.mutate();
         }}
       >
-        <label htmlFor="new-playlist">Nouvelle playlist</label>
-        <input id="new-playlist" value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} />
-        <button type="submit" disabled={create.isPending}>Créer</button>
+        <div className="field">
+          <label htmlFor="new-playlist">Nouvelle playlist</label>
+          <input
+            id="new-playlist"
+            className="input"
+            placeholder="Nom de la playlist"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            maxLength={200}
+          />
+        </div>
+        <button type="submit" className="btn btn-primary" disabled={create.isPending}>
+          <PlusIcon />
+          Créer
+        </button>
       </form>
-      {playlists.data.length === 0 && <p>Aucune playlist.</p>}
+      {playlists.data.length === 0 && (
+        <Empty icon={<ListMusicIcon />}>
+          <p>Aucune playlist. Crée la première ci-dessus.</p>
+        </Empty>
+      )}
       <ul className="rows">
-        {playlists.data.map((p) => (
-          <li key={p.id} className="row">
-            <Link to={detailPath(p.id)} className="meta">
-              <span className="title">{p.name}</span>
-              <span className="artist">{visibleRows(p.items, playable).length} morceaux</span>
-            </Link>
-          </li>
-        ))}
+        {playlists.data.map((p) => {
+          const rows = visibleRows(p.items, playable);
+          return (
+            <li key={p.id} className="row">
+              <Link to={detailPath(p.id)} className="row-main">
+                {rows.length > 0 ? (
+                  <Thumb videoId={rows[0]!.videoId} />
+                ) : (
+                  <span className="thumb">
+                    <ListMusicIcon />
+                  </span>
+                )}
+                <span className="meta">
+                  <span className="title" title={p.name}>{p.name}</span>
+                  <span className="artist">{count(rows.length)}</span>
+                </span>
+                <span className="chevron">
+                  <ChevronRightIcon />
+                </span>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
     </>
   );
@@ -72,6 +120,7 @@ export function PlaylistDetail() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const play = usePlay();
+  const currentId = useCurrent();
   const save = useSavePlaylist();
   const [renaming, setRenaming] = useState(false);
   const remove = useMutation({
@@ -82,15 +131,18 @@ export function PlaylistDetail() {
     },
   });
 
-  if (playlists.isPending || tracks.isPending) return <p>Chargement…</p>;
-  if (playlists.isError) return <p role="alert">{errorMessage(playlists.error)}</p>;
-  if (tracks.isError) return <p role="alert">{errorMessage(tracks.error)}</p>;
+  if (playlists.isPending || tracks.isPending) return <p className="status">Chargement…</p>;
+  if (playlists.isError) return <p className="error" role="alert">{errorMessage(playlists.error)}</p>;
+  if (tracks.isError) return <p className="error" role="alert">{errorMessage(tracks.error)}</p>;
   const playlist = playlists.data.find((p) => p.id === id);
   if (!playlist) {
     return (
-      <p>
-        Playlist introuvable. <Link to="/playlists">Retour aux playlists</Link>
-      </p>
+      <Empty icon={<ListMusicIcon />}>
+        <p>Playlist introuvable.</p>
+        <Link to="/playlists" className="btn">
+          Retour aux playlists
+        </Link>
+      </Empty>
     );
   }
 
@@ -102,72 +154,126 @@ export function PlaylistDetail() {
 
   return (
     <>
-      {renaming ? (
-        <form
-          className="edit"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const name = String(new FormData(event.currentTarget).get("name"));
-            save.mutate({ playlist, change: { name } }, { onSuccess: () => setRenaming(false) });
-          }}
-        >
-          <label htmlFor="playlist-name">Nom de la playlist</label>
-          <input id="playlist-name" name="name" defaultValue={playlist.name} required maxLength={200} />
-          <button type="submit" disabled={busy}>Enregistrer</button>
-          <button type="button" onClick={() => setRenaming(false)}>Annuler</button>
-        </form>
-      ) : (
-        <h1>{playlist.name}</h1>
-      )}
-      <div className="actions">
-        <button type="button" disabled={queue.length === 0} onClick={() => play(queue, 0)}>
-          Tout lire
-        </button>
-        <button type="button" onClick={() => setRenaming(true)}>Renommer</button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => window.confirm(`Supprimer la playlist « ${playlist.name} » ?`) && remove.mutate(playlist)}
-        >
-          Supprimer la playlist
-        </button>
+      <Link to="/playlists" className="back">
+        <ArrowLeftIcon />
+        Playlists
+      </Link>
+      <div className="playlist-head">
+        {renaming ? (
+          <form
+            className="edit"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const name = String(new FormData(event.currentTarget).get("name"));
+              save.mutate({ playlist, change: { name } }, { onSuccess: () => setRenaming(false) });
+            }}
+          >
+            <div className="field">
+              <label htmlFor="playlist-name">Nom de la playlist</label>
+              <input
+                id="playlist-name"
+                className="input"
+                name="name"
+                defaultValue={playlist.name}
+                required
+                maxLength={200}
+                autoFocus
+              />
+            </div>
+            <div className="form-actions">
+              <button type="submit" className="btn btn-primary" disabled={busy}>
+                Enregistrer
+              </button>
+              <button type="button" className="btn" onClick={() => setRenaming(false)}>
+                Annuler
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div>
+            <h1>{playlist.name}</h1>
+            <p className="muted count">{count(rows.length)}</p>
+          </div>
+        )}
+        <div className="toolbar">
+          <button type="button" className="btn btn-primary" disabled={queue.length === 0} onClick={() => play(queue, 0)}>
+            <span className="filled">
+              <PlayIcon />
+            </span>
+            Lire
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Renommer la playlist"
+            title="Renommer la playlist"
+            onClick={() => setRenaming(true)}
+          >
+            <PencilIcon />
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Supprimer la playlist"
+            title="Supprimer la playlist"
+            disabled={busy}
+            onClick={() => window.confirm(`Supprimer la playlist « ${playlist.name} » ?`) && remove.mutate(playlist)}
+          >
+            <Trash2Icon />
+          </button>
+        </div>
       </div>
-      {rows.length === 0 && <p>Aucun morceau lisible dans cette playlist.</p>}
+      {rows.length === 0 && (
+        <Empty icon={<ListMusicIcon />}>
+          <p>Aucun morceau lisible dans cette playlist.</p>
+          <Link to="/" className="btn">
+            Ajouter depuis la bibliothèque
+          </Link>
+        </Empty>
+      )}
       <ol className="rows">
         {rows.map((row, index) => {
           const track = queue[index]!;
           return (
-            <li key={row.position} className="row">
-              <img src={thumbUrl(track.video_id)} loading="lazy" alt="" width={64} height={36} />
-              <div className="meta">
-                <span className="title">{track.title}</span>
-                <span className="artist">{track.artist}</span>
-              </div>
-              <div className="actions">
-                <button type="button" aria-label={`Lire ${track.title}`} onClick={() => play(queue, index)}>▶</button>
+            <li key={row.position} className="row detail-row" aria-current={track.video_id === currentId || undefined}>
+              <button type="button" className="row-main" aria-label={`Lire ${track.title}`} onClick={() => play(queue, index)}>
+                <Thumb videoId={track.video_id} />
+                <span className="meta">
+                  <span className="title" title={track.title}>{track.title}</span>
+                  <span className="artist">{track.artist}</span>
+                </span>
+              </button>
+              <span className="duration">{clock(track.duration_s)}</span>
+              <div className="row-actions">
                 <button
                   type="button"
+                  className="icon-btn"
                   aria-label={`Monter ${track.title}`}
+                  title="Monter"
                   disabled={busy || index === 0}
                   onClick={() => edit(moveRow(playlist.items, rows, index, -1))}
                 >
-                  ↑
+                  <ArrowUpIcon />
                 </button>
                 <button
                   type="button"
+                  className="icon-btn"
                   aria-label={`Descendre ${track.title}`}
+                  title="Descendre"
                   disabled={busy || index === rows.length - 1}
                   onClick={() => edit(moveRow(playlist.items, rows, index, 1))}
                 >
-                  ↓
+                  <ArrowDownIcon />
                 </button>
                 <button
                   type="button"
+                  className="icon-btn"
                   aria-label={`Retirer ${track.title} de la playlist`}
+                  title="Retirer de la playlist"
                   disabled={busy}
                   onClick={() => edit(removeAt(playlist.items, row.position))}
                 >
-                  Retirer
+                  <XIcon />
                 </button>
               </div>
             </li>

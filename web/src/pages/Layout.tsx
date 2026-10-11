@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useReducer } from "react";
+import { useCallback, useReducer, type ReactNode } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router";
 import { errorMessage, meQuery, request } from "../api/client.ts";
+import { LogOutIcon, PlayIcon, XIcon } from "../icons.tsx";
 import { notify, useNotice } from "../notice.ts";
-import { initialPlayer, playerReducer, type QueueItem } from "../player.ts";
-import { PlayContext, Player } from "./Player.tsx";
+import { current, initialPlayer, playerReducer, type QueueItem } from "../player.ts";
+import { CurrentContext, PlayContext, Player } from "./Player.tsx";
 
 /** Auth gate, navigation and the player. The player sits outside <Outlet/>: navigating never stops it. */
 export function Layout() {
@@ -24,28 +25,56 @@ export function Layout() {
     },
   });
 
-  if (me.isPending) return <p className="page">Chargement…</p>;
-  if (me.isError) return <p className="page" role="alert">{errorMessage(me.error)}</p>;
+  if (me.isPending) return <p className="page status">Chargement…</p>;
+  if (me.isError) return <p className="page error" role="alert">{errorMessage(me.error)}</p>;
 
   return (
     <PlayContext value={play}>
-      <header className="top">
-        <nav aria-label="Principale">
-          <NavLink to="/" end>Bibliothèque</NavLink>
-          <NavLink to="/playlists">Playlists</NavLink>
-          <NavLink to="/settings/devices">Appareils</NavLink>
-        </nav>
-        <button type="button" onClick={() => logout.mutate()} disabled={logout.isPending}>
-          Déconnexion
-        </button>
-      </header>
-      <Notice />
-      <main className="page">
-        <Outlet />
-      </main>
-      <Player state={player} dispatch={dispatch} />
+      <CurrentContext value={current(player)?.video_id}>
+        <header className="top">
+          <div className="top-inner">
+            <Brand />
+            <nav className="nav" aria-label="Principale">
+              <NavLink to="/" end>Bibliothèque</NavLink>
+              <NavLink to="/playlists">Playlists</NavLink>
+              <NavLink to="/settings/devices">Appareils</NavLink>
+            </nav>
+            <button
+              type="button"
+              className="icon-btn logout"
+              aria-label="Déconnexion"
+              title="Déconnexion"
+              onClick={() => logout.mutate()}
+              disabled={logout.isPending}
+            >
+              <LogOutIcon />
+            </button>
+          </div>
+        </header>
+        <Notice />
+        <main className="page">
+          <Outlet />
+        </main>
+        <Player state={player} dispatch={dispatch} />
+      </CurrentContext>
     </PlayContext>
   );
+}
+
+export function Brand() {
+  return (
+    <span className="brand">
+      <span className="brand-mark">
+        <PlayIcon />
+      </span>
+      FreeTube
+    </span>
+  );
+}
+
+/** One muted icon, one sentence, at most one action. */
+export function Empty({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return <div className="empty">{icon}{children}</div>;
 }
 
 function Notice() {
@@ -54,8 +83,8 @@ function Notice() {
   return (
     <div className="notice" role="status">
       <span>{message}</span>
-      <button type="button" aria-label="Fermer le message" onClick={() => notify(null)}>
-        ×
+      <button type="button" className="icon-btn" aria-label="Fermer le message" onClick={() => notify(null)}>
+        <XIcon />
       </button>
     </div>
   );

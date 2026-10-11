@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { errorMessage, LOGIN_PATH, request } from "../api/client.ts";
+import { Brand } from "./Layout.tsx";
 
 export function Login() {
   const [password, setPassword] = useState("");
@@ -17,27 +18,37 @@ export function Login() {
 
   return (
     <main className="login">
-      <h1>FreeTube</h1>
+      <h1>
+        <Brand />
+      </h1>
       <form
         onSubmit={(event) => {
           event.preventDefault();
           login.mutate();
         }}
       >
-        <label htmlFor="password">Mot de passe</label>
-        <input
-          id="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          maxLength={1024}
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
-        <button type="submit" disabled={login.isPending}>
+        <div className="field">
+          <label htmlFor="password">Mot de passe</label>
+          <input
+            className="input"
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            maxLength={1024}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            aria-describedby={login.isError ? "login-error" : undefined}
+          />
+          {login.isError && (
+            <p id="login-error" className="error" role="alert">
+              {errorMessage(login.error)}
+            </p>
+          )}
+        </div>
+        <button type="submit" className="btn btn-primary" disabled={login.isPending}>
           Se connecter
         </button>
-        {login.isError && <p role="alert">{errorMessage(login.error)}</p>}
       </form>
     </main>
   );
