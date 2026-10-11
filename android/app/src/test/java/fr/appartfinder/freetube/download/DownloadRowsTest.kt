@@ -4,6 +4,7 @@ import androidx.work.WorkInfo.State
 import fr.appartfinder.freetube.library.AudioFormat
 import fr.appartfinder.freetube.library.TrackEntity
 import fr.appartfinder.freetube.library.UploadState
+import fr.appartfinder.freetube.youtube.PlaylistId
 import fr.appartfinder.freetube.youtube.VideoId
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -12,7 +13,7 @@ class DownloadRowsTest {
     private val id = VideoId.parse("dQw4w9WgXcQ")!!
 
     private fun job(stage: Stage, state: State, percent: Int? = null, title: String? = null, error: PipelineError? = null) =
-        Job(id, stage, state, percent, title, error)
+        Job(JobSubject.Track(id), stage, state, percent, title, error)
 
     private fun track(state: UploadState) =
         TrackEntity(id.value, "Room title", "A", 1, AudioFormat.M4A, "/a", "/t", state, 0)
@@ -54,9 +55,23 @@ class DownloadRowsTest {
         assertEquals("p", downloadRows(listOf(job(Stage.DOWNLOAD, State.RUNNING, title = "p")), emptyList()).single().title)
         val other = VideoId.parse("aaaaaaaaaaa")!!
         val rows = downloadRows(
-            listOf(job(Stage.DOWNLOAD, State.FAILED, error = PipelineError.NETWORK), Job(other, Stage.DOWNLOAD, State.RUNNING, 5, null, null)),
+            listOf(job(Stage.DOWNLOAD, State.FAILED, error = PipelineError.NETWORK), Job(JobSubject.Track(other), Stage.DOWNLOAD, State.RUNNING, 5, null, null)),
             emptyList(),
         )
-        assertEquals(listOf(other, id), rows.map { it.videoId })
+        assertEquals(listOf(JobSubject.Track(other), JobSubject.Track(id)), rows.map { it.subject })
+    }
+
+    @Test
+    fun playlistImportHasItsOwnRow() {
+        val list = JobSubject.Playlist(PlaylistId.parse("PLabc123")!!)
+        fun import(state: State, error: PipelineError? = null) = Job(list, Stage.IMPORT, state, null, null, error)
+
+        val running = downloadRows(listOf(import(State.RUNNING), job(Stage.DOWNLOAD, State.ENQUEUED)), emptyList())
+        assertEquals(listOf(list to DownloadStatus.Importing, JobSubject.Track(id) to DownloadStatus.Queued), running.map { it.subject to it.status })
+        assertEquals(listOf(DownloadStatus.Queued), downloadRows(listOf(import(State.ENQUEUED)), emptyList()).map { it.status })
+        assertEquals(listOf(DownloadStatus.Failed(PipelineError.NETWORK)),
+            downloadRows(listOf(import(State.FAILED, PipelineError.NETWORK)), emptyList()).map { it.status })
+        // A finished import leaves no row: its tracks have their own.
+        assertEquals(emptyList<DownloadRow>(), downloadRows(listOf(import(State.SUCCEEDED)), emptyList()))
     }
 }

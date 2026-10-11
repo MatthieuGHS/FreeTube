@@ -2,6 +2,7 @@ package fr.appartfinder.freetube.download
 
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
+import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.ListenableWorker
 import androidx.work.NetworkType
@@ -15,18 +16,28 @@ import androidx.work.workDataOf
 import fr.appartfinder.freetube.library.TrackDao
 import fr.appartfinder.freetube.library.TrackEntity
 import fr.appartfinder.freetube.library.UploadState
+import fr.appartfinder.freetube.youtube.PlaylistId
 import fr.appartfinder.freetube.youtube.VideoId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** What a Downloads row is about: one track's chain, or a YouTube playlist being read. */
+sealed interface JobSubject {
+    data class Track(val videoId: VideoId) : JobSubject
+
+    data class Playlist(val listId: PlaylistId) : JobSubject
+}
+
 /** One line of the Downloads screen. Uploaded tracks have no row: they live in the Library. */
-data class DownloadRow(val videoId: VideoId, val title: String?, val status: DownloadStatus)
+data class DownloadRow(val subject: JobSubject, val title: String?, val status: DownloadStatus)
 
 sealed interface DownloadStatus {
     data object Queued : DownloadStatus // waiting for network, for the engine, or for the previous step
+    data object Importing : DownloadStatus // reading a playlist's entries
     data class Downloading(val percent: Int?) : DownloadStatus
     data object Uploading : DownloadStatus
     data class Failed(val error: PipelineError) : DownloadStatus
@@ -35,7 +46,7 @@ sealed interface DownloadStatus {
 
 /**
  * The only writer AND reader of track jobs: unique name, tags, constraints and backoff live here only.
- * Callers: YouTube button, share intent, Downloads "Relancer", Settings (token saved); M5 playlist import.
+ * Callers: YouTube button, share intent, Downloads "Relancer", Settings (token saved), playlist import.
  */
 @Singleton
 class TrackPipeline @Inject constructor(
@@ -48,9 +59,18 @@ class TrackPipeline @Inject constructor(
      */
     fun enqueue(videoId: VideoId) {
         workManager
-            .beginUniqueWork("track-$videoId", ExistingWorkPolicy.KEEP, request<DownloadWorker>(videoId, Stage.DOWNLOAD))
-            .then(request<UploadWorker>(videoId, Stage.UPLOAD))
+            .beginUniqueWork("track-$videoId", ExistingWorkPolicy.KEEP, trackRequest<DownloadWorker>(videoId, Stage.DOWNLOAD))
+            .then(trackRequest<UploadWorker>(videoId, Stage.UPLOAD))
             .enqueue()
+    }
+
+    /**
+     * KEEP: a second tap while the import runs is ignored. The FreeTube playlist id is drawn here, once per
+     * import: a retried worker rewrites the same playlist instead of creating a second one.
+     */
+    fun importPlaylist(listId: PlaylistId) {
+        val input = workDataOf(KEY_LIST_ID to listId.value, KEY_PLAYLIST_ID to UUID.randomUUID().toString())
+        workManager.enqueueUniqueWork("playlist-${listId.value}", ExistingWorkPolicy.KEEP, request<ResolvePlaylistWorker>(input, LIST_TAG + listId.value, Stage.IMPORT))
     }
 
     /** Track deleted by the user: its chain must not upload it afterwards. */
@@ -68,24 +88,27 @@ class TrackPipeline @Inject constructor(
             downloadRows(infos.mapNotNull(::toJob), all)
         }
 
-    private inline fun <reified W : ListenableWorker> request(videoId: VideoId, stage: Stage): OneTimeWorkRequest =
+    private inline fun <reified W : ListenableWorker> trackRequest(videoId: VideoId, stage: Stage): OneTimeWorkRequest =
+        request<W>(workDataOf(KEY_VIDEO_ID to videoId.value), VIDEO_TAG + videoId, stage)
+
+    private inline fun <reified W : ListenableWorker> request(input: Data, subjectTag: String, stage: Stage): OneTimeWorkRequest =
         OneTimeWorkRequestBuilder<W>()
-            .setInputData(workDataOf(KEY_VIDEO_ID to videoId.value))
+            .setInputData(input)
             .setConstraints(Constraints(requiredNetworkType = NetworkType.CONNECTED))
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .keepResultsForAtLeast(7, TimeUnit.DAYS)
             .addTag(TAG)
-            .addTag(VIDEO_TAG + videoId)
+            .addTag(subjectTag)
             .addTag(stage.tag)
             .apply { if (stage == Stage.DOWNLOAD) setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST) }
             .build()
 
     private fun toJob(info: WorkInfo): Job? {
-        val videoId = info.tags.firstOrNull { it.startsWith(VIDEO_TAG) }?.removePrefix(VIDEO_TAG)?.let(VideoId::parse)
+        val subject = info.tags.firstNotNullOfOrNull(::subjectOf)
         val stage = Stage.entries.firstOrNull { it.tag in info.tags }
-        if (videoId == null || stage == null) return null
+        if (subject == null || stage == null) return null
         return Job(
-            videoId = videoId,
+            subject = subject,
             stage = stage,
             state = info.state,
             percent = info.progress.getInt(KEY_PERCENT, -1).takeIf { it >= 0 },
@@ -94,18 +117,27 @@ class TrackPipeline @Inject constructor(
         )
     }
 
+    private fun subjectOf(tag: String): JobSubject? = when {
+        tag.startsWith(VIDEO_TAG) -> VideoId.parse(tag.removePrefix(VIDEO_TAG))?.let(JobSubject::Track)
+        tag.startsWith(LIST_TAG) -> PlaylistId.parse(tag.removePrefix(LIST_TAG))?.let(JobSubject::Playlist)
+        else -> null
+    }
+
     companion object {
         const val KEY_VIDEO_ID = "videoId"
+        const val KEY_LIST_ID = "listId"
+        const val KEY_PLAYLIST_ID = "playlistId"
         const val KEY_PERCENT = "percent"
         const val KEY_TITLE = "title"
         private const val TAG = "track"
         private const val VIDEO_TAG = "video:"
+        private const val LIST_TAG = "list:"
     }
 }
 
 /** WorkInfo projected to what the screen needs: WorkInfo itself stays in this file. */
 internal data class Job(
-    val videoId: VideoId,
+    val subject: JobSubject,
     val stage: Stage,
     val state: WorkInfo.State,
     val percent: Int?,
@@ -113,7 +145,7 @@ internal data class Job(
     val error: PipelineError?,
 )
 
-internal enum class Stage(val tag: String) { DOWNLOAD("stage:download"), UPLOAD("stage:upload") }
+internal enum class Stage(val tag: String) { IMPORT("stage:import"), DOWNLOAD("stage:download"), UPLOAD("stage:upload") }
 
 /**
  * Pure (unit-tested): the Downloads screen, merged at read time from the two owners.
@@ -124,11 +156,12 @@ internal enum class Stage(val tag: String) { DOWNLOAD("stage:download"), UPLOAD(
  */
 internal fun downloadRows(jobs: List<Job>, tracks: List<TrackEntity>): List<DownloadRow> {
     val tracksById = tracks.associateBy { it.videoId }
-    val ids = (jobs.map { it.videoId.value } + tracks.filter { it.uploadState == UploadState.PENDING }.map { it.videoId }).distinct()
-    val rows = ids.mapNotNull { id ->
-        val track = tracksById[id]
+    val pending = tracks.filter { it.uploadState == UploadState.PENDING }.mapNotNull { VideoId.parse(it.videoId)?.let(JobSubject::Track) }
+    val subjects = (jobs.map { it.subject } + pending).distinct()
+    val rows = subjects.mapNotNull { subject ->
+        val track = (subject as? JobSubject.Track)?.let { tracksById[it.videoId.value] }
         if (track?.uploadState == UploadState.UPLOADED) return@mapNotNull null
-        val videoJobs = jobs.filter { it.videoId.value == id }
+        val videoJobs = jobs.filter { it.subject == subject }
         val active = videoJobs.filterNot { it.state.isFinished }
         val status = when {
             active.isNotEmpty() -> activeStatus(active)
@@ -138,7 +171,7 @@ internal fun downloadRows(jobs: List<Job>, tracks: List<TrackEntity>): List<Down
                 ?: DownloadStatus.NotSent.takeIf { track != null }
         } ?: return@mapNotNull null
         val title = track?.title ?: videoJobs.firstNotNullOfOrNull { it.title }
-        DownloadRow(VideoId.parse(id)!!, title, status)
+        DownloadRow(subject, title, status)
     }
     return rows.sortedBy { if (it.status is DownloadStatus.Failed || it.status is DownloadStatus.NotSent) 1 else 0 }
 }
@@ -147,6 +180,7 @@ private fun activeStatus(active: List<Job>): DownloadStatus {
     val download = active.firstOrNull { it.stage == Stage.DOWNLOAD }
     val upload = active.firstOrNull { it.stage == Stage.UPLOAD }
     return when {
+        active.any { it.stage == Stage.IMPORT && it.state == WorkInfo.State.RUNNING } -> DownloadStatus.Importing
         download?.state == WorkInfo.State.RUNNING -> DownloadStatus.Downloading(download.percent)
         upload?.state == WorkInfo.State.RUNNING -> DownloadStatus.Uploading
         else -> DownloadStatus.Queued

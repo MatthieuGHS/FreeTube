@@ -45,6 +45,7 @@ import fr.appartfinder.freetube.playback.PlayerConnection
 import fr.appartfinder.freetube.settings.SettingsScreen
 import fr.appartfinder.freetube.sync.requestSync
 import fr.appartfinder.freetube.sync.schedulePeriodicSync
+import fr.appartfinder.freetube.youtube.PlaylistId
 import fr.appartfinder.freetube.youtube.VideoId
 import fr.appartfinder.freetube.youtube.YoutubeScreen
 import fr.appartfinder.freetube.youtube.YoutubeTarget
@@ -108,13 +109,18 @@ class MainActivity : ComponentActivity() {
     private fun handleShare(text: String): String = when (val target = classifySharedText(text)) {
         is YoutubeTarget.Track -> download(target.videoId)
         is YoutubeTarget.TrackInPlaylist -> download(target.videoId)
-        is YoutubeTarget.Playlist -> "Import de playlist : pas encore disponible"
+        is YoutubeTarget.Playlist -> importPlaylist(target.listId)
         null -> "Lien YouTube non reconnu"
     }
 
     private fun download(videoId: VideoId): String {
         pipeline.enqueue(videoId)
         return "Ajouté aux téléchargements"
+    }
+
+    private fun importPlaylist(listId: PlaylistId): String {
+        pipeline.importPlaylist(listId)
+        return "Import de la playlist lancé"
     }
 
     @Composable

@@ -60,6 +60,9 @@ interface TrackDao {
     @Query("SELECT * FROM tracks")
     suspend fun all(): List<TrackEntity>
 
+    @Query("SELECT videoId FROM tracks")
+    suspend fun ids(): List<String>
+
     @Query("SELECT videoId FROM tracks WHERE uploadState = 'PENDING'")
     suspend fun pendingUploadIds(): List<String>
 

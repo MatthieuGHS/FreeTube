@@ -18,6 +18,8 @@ value class VideoId private constructor(val value: String) {
 /** A public YouTube playlist id. Private lists (LL, WL, LM) never parse: brief §3 excludes them. */
 @JvmInline
 value class PlaylistId private constructor(val value: String) {
+    override fun toString() = value
+
     /** YouTube Mix ("RD…"): generated per user, not importable as a frozen copy. */
     val isMix: Boolean get() = value.startsWith("RD")
 

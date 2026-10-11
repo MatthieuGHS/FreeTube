@@ -10,6 +10,7 @@ import com.yausername.youtubedl_android.YoutubeDLException
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import fr.appartfinder.freetube.library.AudioFormat
+import fr.appartfinder.freetube.youtube.PlaylistId
 import fr.appartfinder.freetube.youtube.VideoId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
@@ -28,6 +29,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
@@ -53,6 +55,8 @@ data class DownloadedAudio(val meta: TrackMeta, val file: File)
 
 data class DownloadProgress(val title: String?, val percent: Int?)
 
+data class ResolvedPlaylist(val title: String, val videoIds: List<VideoId>)
+
 private val Context.engineStore by preferencesDataStore("engine")
 private val CHECKED_AT = longPreferencesKey("checked_at")
 
@@ -73,17 +77,30 @@ class YtDlp @Inject constructor(@ApplicationContext private val context: Context
 
     /** Best audio stream, no conversion. Returns once the final file is in filesDir/audio. */
     suspend fun download(videoId: VideoId, onProgress: (DownloadProgress) -> Unit): DownloadedAudio =
-        mutex.withLock {
-            ensureInit()
-            if (YoutubeDL.versionName(context) == null) updateLocked()
-            try {
-                run(videoId, onProgress)
-            } catch (e: PipelineException) {
-                if (e.error != PipelineError.ENGINE_OUTDATED || checkedWithin(1.hours)) throw e
-                updateLocked() // one internal retry after a fresh update
-                run(videoId, onProgress)
-            }
+        withEngine { run(videoId, onProgress) }
+
+    /** Entry ids and title only (`--flat-playlist`): nothing is downloaded. */
+    suspend fun resolvePlaylist(listId: PlaylistId): ResolvedPlaylist = withEngine {
+        val request = YoutubeDLRequest("https://www.youtube.com/playlist?list=${listId.value}").apply {
+            addOption("--flat-playlist")
+            addOption("-J")
         }
+        parsePlaylistOutput(execute(request, "playlist-${listId.value}") { _, _ -> }.out)
+            ?: throw PipelineException(PipelineError.UNSUPPORTED)
+    }
+
+    /** Under the lock, with an updated engine; one internal retry after a fresh update if YouTube refuses it. */
+    private suspend fun <T> withEngine(block: suspend () -> T): T = mutex.withLock {
+        ensureInit()
+        if (YoutubeDL.versionName(context) == null) updateLocked()
+        try {
+            block()
+        } catch (e: PipelineException) {
+            if (e.error != PipelineError.ENGINE_OUTDATED || checkedWithin(1.hours)) throw e
+            updateLocked()
+            block()
+        }
+    }
 
     /** Settings button: always checks GitHub. Throws [PipelineException] (error also kept in [status]). */
     suspend fun update() = mutex.withLock {
@@ -134,22 +151,27 @@ class YtDlp @Inject constructor(@ApplicationContext private val context: Context
             addOption("--progress") // --print implies --quiet: keep the progress lines
             addOption("--newline")
         }
-        val processId = "track-$videoId"
         var title: String? = null
         var lastPercent = -1
-        val response = coroutineScope {
-            // Cancellation (WorkManager stop) must kill the yt-dlp process, not just abandon it.
+        val response = execute(request, "track-$videoId") { progress, line ->
+            if (line.startsWith(TITLE_PREFIX)) title = line.removePrefix(TITLE_PREFIX)
+            val percent = progress.toInt().coerceIn(0, 100)
+            if (percent != lastPercent) { // each report is a WorkManager DB write
+                lastPercent = percent
+                onProgress(DownloadProgress(title, percent))
+            }
+        }
+        tempDir.listFiles { f -> f.name.startsWith(videoId.value) }?.forEach(File::delete)
+        return parseDownloadOutput(response.out, audioDir) ?: throw PipelineException(PipelineError.UNSUPPORTED)
+    }
+
+    /** yt-dlp errors become [PipelineException]. Cancellation (WorkManager stop) kills the process, not just abandons it. */
+    private suspend fun execute(request: YoutubeDLRequest, processId: String, onLine: (Float, String) -> Unit) =
+        coroutineScope {
             val killer = launch { try { awaitCancellation() } finally { YoutubeDL.destroyProcessById(processId) } }
             try {
                 runInterruptible(Dispatchers.IO) {
-                    YoutubeDL.execute(request, processId) { progress, _, line ->
-                        if (line.startsWith(TITLE_PREFIX)) title = line.removePrefix(TITLE_PREFIX)
-                        val percent = progress.toInt().coerceIn(0, 100)
-                        if (percent != lastPercent) { // each report is a WorkManager DB write
-                            lastPercent = percent
-                            onProgress(DownloadProgress(title, percent))
-                        }
-                    }
+                    YoutubeDL.execute(request, processId) { progress, _, line -> onLine(progress, line) }
                 }
             } catch (e: YoutubeDLException) {
                 throw PipelineException(classifyYtDlpError(e.message.orEmpty()), e)
@@ -157,9 +179,6 @@ class YtDlp @Inject constructor(@ApplicationContext private val context: Context
                 killer.cancel()
             }
         }
-        tempDir.listFiles { f -> f.name.startsWith(videoId.value) }?.forEach(File::delete)
-        return parseDownloadOutput(response.out, audioDir) ?: throw PipelineException(PipelineError.UNSUPPORTED)
-    }
 
     private suspend fun checkedAt(): Long? = context.engineStore.data.map { it[CHECKED_AT] }.first()
 
@@ -195,3 +214,19 @@ internal fun parseDownloadOutput(stdout: String, audioDir: File): DownloadedAudi
 private fun JsonObject.durationSeconds(): Int? =
     (get("duration") as? JsonPrimitive)?.doubleOrNull
         ?.roundToInt()?.takeIf { it in 0..86_400 }
+
+/**
+ * Pure (unit-tested). Reads `yt-dlp --flat-playlist -J`: invalid ids are dropped, duplicates keep their
+ * first position (a frozen copy has each track once). Private/deleted entries are kept: their download
+ * fails visibly. Null = not a playlist dump.
+ */
+internal fun parsePlaylistOutput(stdout: String): ResolvedPlaylist? {
+    val line = stdout.lineSequence().lastOrNull { it.startsWith("{") } ?: return null
+    val obj = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return null
+    val entries = obj["entries"] as? JsonArray ?: return null
+    val ids = entries.mapNotNull { entry ->
+        ((entry as? JsonObject)?.get("id") as? JsonPrimitive)?.contentOrNull?.let(VideoId::parse)
+    }.distinct()
+    val title = (obj["title"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty().ifBlank { "Playlist YouTube" }
+    return ResolvedPlaylist(title, ids)
+}

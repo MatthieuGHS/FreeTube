@@ -21,7 +21,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import fr.appartfinder.freetube.youtube.VideoId
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -32,8 +31,11 @@ class DownloadsViewModel @Inject constructor(private val pipeline: TrackPipeline
     val rows: StateFlow<List<DownloadRow>?> =
         pipeline.rows.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** "Relancer" is the same idempotent call as the first download. */
-    fun retry(videoId: VideoId) = pipeline.enqueue(videoId)
+    /** "Relancer" is the same idempotent call as the first request. */
+    fun retry(subject: JobSubject) = when (subject) {
+        is JobSubject.Track -> pipeline.enqueue(subject.videoId)
+        is JobSubject.Playlist -> pipeline.importPlaylist(subject.listId)
+    }
 }
 
 @Composable
@@ -45,7 +47,7 @@ fun DownloadsScreen(viewModel: DownloadsViewModel) {
             Text("Aucun téléchargement en cours")
         }
         else -> LazyColumn(Modifier.fillMaxSize()) {
-            items(rows!!, key = { it.videoId.value }) { row -> DownloadRowItem(row) { viewModel.retry(row.videoId) } }
+            items(rows!!, key = { it.subject.toString() }) { row -> DownloadRowItem(row) { viewModel.retry(row.subject) } }
         }
     }
 }
@@ -53,9 +55,17 @@ fun DownloadsScreen(viewModel: DownloadsViewModel) {
 @Composable
 private fun DownloadRowItem(row: DownloadRow, onRetry: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
-        Text(row.title ?: row.videoId.value, style = MaterialTheme.typography.bodyLarge, maxLines = 2)
+        val label = row.title ?: when (val subject = row.subject) {
+            is JobSubject.Track -> subject.videoId.value
+            is JobSubject.Playlist -> "Playlist ${subject.listId.value}"
+        }
+        Text(label, style = MaterialTheme.typography.bodyLarge, maxLines = 2)
         when (val status = row.status) {
             DownloadStatus.Queued -> Text("En attente", style = MaterialTheme.typography.bodySmall)
+            DownloadStatus.Importing -> {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+                Text("Lecture de la playlist…", style = MaterialTheme.typography.bodySmall)
+            }
             is DownloadStatus.Downloading -> {
                 val percent = status.percent
                 if (percent == null) LinearProgressIndicator(Modifier.fillMaxWidth())
