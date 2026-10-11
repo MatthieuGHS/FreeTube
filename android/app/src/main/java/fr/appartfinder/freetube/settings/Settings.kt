@@ -70,6 +70,9 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
         SettingsSnapshot(it[SERVER_URL] ?: DEFAULT_SERVER_URL, it[DEVICE_TOKEN] != null)
     }
 
+    /** Base URL for server thumbnails of tracks with no local file. */
+    val serverUrl: Flow<HttpUrl?> = snapshot.map { it.serverUrl.toHttpUrlOrNull() }
+
     /** https only. Returns false (nothing saved) otherwise. Normalised to end with "/" for Retrofit. */
     suspend fun setServerUrl(raw: String): Boolean {
         val url = raw.trim().toHttpUrlOrNull()?.takeIf { it.isHttps } ?: return false

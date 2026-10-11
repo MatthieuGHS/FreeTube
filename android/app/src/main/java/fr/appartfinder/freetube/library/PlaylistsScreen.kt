@@ -107,7 +107,7 @@ class PlaylistViewModel @Inject constructor(
             val rows = items.mapNotNull { item -> byId[item.videoId]?.let { PlaylistRow(item.position, it) } }
             playlist?.let { PlaylistDetail(it, rows, items.size - rows.size) }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-    val server: StateFlow<HttpUrl?> = settings.serverUrl().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val server: StateFlow<HttpUrl?> = settings.serverUrl.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Only the visible (playable) tracks become the queue. */
     fun play(index: Int) = detail.value?.let { d -> player.play(d.rows.map { it.track }, index) }

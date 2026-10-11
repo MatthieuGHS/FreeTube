@@ -38,14 +38,11 @@ import coil3.compose.AsyncImage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import fr.appartfinder.freetube.playback.PlayerConnection
 import fr.appartfinder.freetube.settings.Settings
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.io.File
 import javax.inject.Inject
 
@@ -62,7 +59,7 @@ class LibraryViewModel @Inject constructor(
         tracks.observeAll().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     val playlists: StateFlow<List<PlaylistEntity>> =
         playlists.observeAll().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-    val server: StateFlow<HttpUrl?> = settings.serverUrl().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val server: StateFlow<HttpUrl?> = settings.serverUrl.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** The whole library becomes the queue, starting at the tapped track. */
     fun play(index: Int) = tracks.value?.let { player.play(it, index) }
@@ -73,9 +70,6 @@ class LibraryViewModel @Inject constructor(
 
     fun delete(track: TrackEntity) = viewModelScope.launch { writer.deleteTrack(track.videoId) }
 }
-
-/** Base URL for server thumbnails of tracks with no local file. */
-internal fun Settings.serverUrl(): Flow<HttpUrl?> = snapshot.map { it.serverUrl.toHttpUrlOrNull() }
 
 private sealed interface TrackDialog {
     val track: TrackEntity
