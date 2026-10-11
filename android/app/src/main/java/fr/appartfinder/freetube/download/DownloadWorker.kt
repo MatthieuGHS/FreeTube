@@ -54,7 +54,7 @@ class DownloadWorker @AssistedInject constructor(
         return try {
             val thumb = fetchThumbnail(videoId)
             val audio = ytDlp.download(videoId) { report(videoId, it) }
-            tracks.upsert(
+            tracks.saveDownloaded(
                 TrackEntity(
                     videoId = videoId.value,
                     title = existing?.title ?: audio.meta.title,

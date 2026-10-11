@@ -7,6 +7,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
+import androidx.room.Transaction
 import androidx.room.Upsert
 import fr.appartfinder.freetube.sync.OutboxOpEntity
 import fr.appartfinder.freetube.sync.SyncDao
@@ -68,6 +69,19 @@ interface TrackDao {
 
     @Upsert
     suspend fun upsert(track: TrackEntity)
+
+    /**
+     * A finished download. A delete_track still in the outbox would reach the server after this track's
+     * upload and the next pull would erase the new download: re-downloading cancels the pending deletion.
+     */
+    @Transaction
+    suspend fun saveDownloaded(track: TrackEntity) {
+        upsert(track)
+        cancelPendingDelete(track.videoId)
+    }
+
+    @Query("DELETE FROM outbox WHERE type = 'DELETE_TRACK' AND entityId = :videoId")
+    suspend fun cancelPendingDelete(videoId: String)
 
     @Upsert
     suspend fun upsertAll(tracks: List<TrackEntity>)
