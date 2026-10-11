@@ -158,3 +158,20 @@ renomme en `freetube.db.before-restore`.
    nouveau. Si l'ancienne base est perdue elle aussi (disque mort), il faut remettre à zéro le curseur
    de synchro du téléphone (procédure décrite en M5).
 5. Quand tout va bien, supprime `/srv/freetube/data/freetube.db.before-restore`.
+
+## Créer un token d'appareil (avant la page web de M6)
+
+Depuis ton poste, une commande à la fois (le mot de passe est lu sans être affiché ni gardé dans
+l'historique, et le JSON est construit par Python pour supporter tous les caractères) :
+
+```bash
+read -rs PW
+python3 -c 'import json,sys; print(json.dumps({"password": sys.argv[1]}))' "$PW" > /tmp/ft.login; unset PW
+curl https://appartfinder.fr/api/auth/login -s -c /tmp/ft.cookies -o /dev/null -w '%{http_code}\n' -H 'content-type: application/json' -d @/tmp/ft.login
+rm /tmp/ft.login
+curl https://appartfinder.fr/api/devices -s -b /tmp/ft.cookies -H 'content-type: application/json' -d '{"name":"A06"}'
+rm /tmp/ft.cookies
+```
+
+Le login doit répondre `204`. Le token (champ `"token"`) n'est affiché qu'une fois : colle-le dans
+l'app FreeTube, onglet **Réglages** → **Token d'appareil**.

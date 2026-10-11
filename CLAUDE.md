@@ -35,7 +35,7 @@ App Android (YouTube → audio → S3 + lecteur) et site web perso. **Source de 
 | Android (`android/`) | `export JAVA_HOME=/opt/android-studio/jbr` (le Java 11 système est trop vieux) · `./gradlew testDebugUnitTest lint` · `./gradlew assembleDebug` · `adb install -r app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` |
 | Image (`server/`) | `docker build --platform linux/arm64 .` (la prod est en arm64) |
 | Tâches serveur | `python -m freetube.hash_password` · `python -m freetube.backup [--restore KEY]` · `python -m freetube.purge` (dans le conteneur, voir `docs/deploy.md`) |
-| Token d'appareil (avant M6) | `curl` sur `POST /api/devices` après login, voir l'échange du 2026-10-11 : mot de passe lu par `read -rs`, JSON construit par Python |
+| Token d'appareil (avant M6) | `docs/deploy.md`, section « Créer un token d'appareil » |
 | Prod | `ssh freetube` (lecture seule sans accord) · déployer : `docs/deploy.md` · console AWS : `docs/infra-setup.md` |
 
 Mettre ce tableau à jour quand une commande change.
