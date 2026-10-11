@@ -23,7 +23,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -94,6 +96,7 @@ fun MiniPlayer(connection: PlayerConnection, state: PlayerState, onOpen: () -> U
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class) // custom Slider thumb/track
 @Composable
 fun FullPlayer(connection: PlayerConnection, state: PlayerState) {
     val current = state.current
@@ -120,6 +123,17 @@ fun FullPlayer(connection: PlayerConnection, state: PlayerState) {
                 },
                 enabled = duration > 0,
                 modifier = Modifier.padding(top = 8.dp),
+                // The M3 default (bar thumb, gap, end dot) is heavier than the rest of the app: thin track, round thumb.
+                thumb = { Box(Modifier.size(14.dp).background(MaterialTheme.colorScheme.primary, CircleShape)) },
+                track = { sliderState ->
+                    SliderDefaults.Track(
+                        sliderState,
+                        modifier = Modifier.height(4.dp),
+                        drawStopIndicator = null,
+                        thumbTrackGapSize = 0.dp,
+                        colors = SliderDefaults.colors(inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant),
+                    )
+                },
             )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 val shown = dragging?.let { (it * duration).toLong() } ?: pos
