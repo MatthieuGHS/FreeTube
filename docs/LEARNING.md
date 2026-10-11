@@ -226,3 +226,44 @@ et un crash au démarrage (icônes système incompatibles avec Compose sur ce Sa
 2. Pourquoi les envois vers S3 utilisent-ils un client HTTP différent de celui qui parle au serveur ?
 3. Tu appuies deux fois de suite sur « Télécharger ce morceau ». Combien de téléchargements ont lieu, et
    grâce à quoi ?
+
+---
+
+## M4 — Lecture (2026-10-11)
+
+### Ce qui a été construit
+
+Le lecteur de l'app : un appui dans la Bibliothèque lance toute la bibliothèque à partir de ce morceau ;
+mini-lecteur au-dessus des onglets, lecteur plein écran (progression, précédent/suivant, aléatoire,
+répétition, file d'attente) ; lecture du fichier local, ou en streaming depuis le serveur s'il n'est pas
+sur le téléphone. Vérifié sur l'A06 : lecture hors ligne en mode avion, et streaming d'un morceau dont le
+fichier local a été supprimé (le serveur a répondu 302 vers S3 au `/stream` authentifié). 27 tests JVM verts.
+
+### Concepts
+
+- **MediaController / MediaSessionService** : l'interface est une télécommande ; le service possède le
+  lecteur. La télécommande n'envoie que l'identifiant du morceau, le service retrouve lui-même la source.
+- **Streaming par redirection** : l'app appelle le serveur avec son token, le serveur répond « va chercher
+  ici » (302) avec une URL S3 signée ; le fichier ne passe jamais par le serveur (D3).
+- **Portée d'un secret** : le token n'est ajouté que pour l'hôte du serveur. Quand la redirection change
+  d'hôte, il ne suit pas. Un test le prouve avec deux faux serveurs.
+- **Requêtes par plages (Range)** : le lecteur ne télécharge que la partie dont il a besoin, ce qui
+  permet d'avancer dans un morceau en streaming.
+- **Source de vérité de la lecture** : la file, l'aléatoire et la répétition vivent dans le lecteur
+  lui-même, pas dans l'interface, d'où le même comportement depuis l'écran de verrouillage.
+
+### Fichiers à lire, dans l'ordre
+
+1. `docs/adr/0005-playback-source-resolution-and-auth.md`
+2. `android/app/src/main/java/fr/appartfinder/freetube/playback/PlaybackSource.kt` (et son test)
+3. `android/app/src/main/java/fr/appartfinder/freetube/playback/PlaybackService.kt`
+4. `android/app/src/main/java/fr/appartfinder/freetube/api/FreeTubeApi.kt` (`authorize`, `AuthInterceptor`)
+5. `android/app/src/test/java/fr/appartfinder/freetube/api/AuthInterceptorTest.kt`
+
+### Questions de compréhension
+
+1. Pourquoi est-ce le service, et pas l'écran Bibliothèque, qui décide si un morceau est lu en local
+   ou en streaming ?
+2. Que se passerait-il si le token était ajouté à toutes les requêtes du client OkHttp, S3 compris ?
+3. Tu mets la lecture en pause 2 heures sur un morceau en streaming (URL S3 valable 1 h). Pourquoi la
+   reprise fonctionne-t-elle quand même ?
