@@ -16,7 +16,7 @@
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:label="@string/app_name"
-        android:theme="@android:style/Theme.Material.NoActionBar">
+        android:theme="@style/Theme.FreeTube">
 
         <!-- singleTask: a share from the YouTube app brings FreeTube's task forward instead of stacking
              a second activity inside YouTube's task. configChanges: the WebView survives rotation. -->

@@ -1,0 +1,6 @@
+<resources>
+    <!-- The window behind Compose: matches the theme bg so launch shows no dark/light flash. -->
+    <style name="Theme.FreeTube" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FFFFFFFF</item>
+    </style>
+</resources>

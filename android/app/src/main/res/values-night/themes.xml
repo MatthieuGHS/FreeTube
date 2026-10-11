@@ -1,0 +1,5 @@
+<resources>
+    <style name="Theme.FreeTube" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FF0B0B0C</item>
+    </style>
+</resources>
