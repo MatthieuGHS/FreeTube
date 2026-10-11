@@ -29,10 +29,12 @@ import fr.appartfinder.freetube.api.ServerClient
 import fr.appartfinder.freetube.download.EngineStatus
 import fr.appartfinder.freetube.download.TrackPipeline
 import fr.appartfinder.freetube.download.YtDlp
+import fr.appartfinder.freetube.sync.SyncDao
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
@@ -56,8 +58,10 @@ class SettingsViewModel @Inject constructor(
     private val serverClient: ServerClient,
     private val ytDlp: YtDlp,
     private val pipeline: TrackPipeline,
+    sync: SyncDao,
 ) : ViewModel() {
     val snapshot: StateFlow<SettingsSnapshot?> = settings.snapshot.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val lastSyncAt: StateFlow<Long?> = sync.observeState().map { it?.lastSyncAt }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     val engine: StateFlow<EngineStatus> = ytDlp.status
 
     private val _tokenStatus = MutableStateFlow(TokenStatus.IDLE)
@@ -98,6 +102,7 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
     val engine by viewModel.engine.collectAsStateWithLifecycle()
     val tokenStatus by viewModel.tokenStatus.collectAsStateWithLifecycle()
     val urlError by viewModel.urlError.collectAsStateWithLifecycle()
+    val lastSyncAt by viewModel.lastSyncAt.collectAsStateWithLifecycle()
     val current = snapshot ?: return
     var url by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(current.serverUrl) { if (url.isEmpty()) url = current.serverUrl }
@@ -118,6 +123,9 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
             visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
         Button(onClick = { viewModel.saveToken(token); token = "" }, enabled = token.isNotBlank()) { Text("Enregistrer le token") }
         tokenStatus.label?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+
+        Text("Synchronisation", style = MaterialTheme.typography.titleMedium)
+        Text("Dernière synchro : ${lastSyncAt?.let { DateFormat.getDateTimeInstance().format(Date(it)) } ?: "jamais"}", style = MaterialTheme.typography.bodySmall)
 
         Text("Moteur de téléchargement", style = MaterialTheme.typography.titleMedium)
         Text("Version : ${engine.version ?: "jamais mis à jour"}", style = MaterialTheme.typography.bodySmall)

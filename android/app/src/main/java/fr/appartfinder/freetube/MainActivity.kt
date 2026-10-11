@@ -39,6 +39,9 @@ import dagger.hilt.android.AndroidEntryPoint
 import fr.appartfinder.freetube.download.DownloadsScreen
 import fr.appartfinder.freetube.download.TrackPipeline
 import fr.appartfinder.freetube.library.LibraryScreen
+import fr.appartfinder.freetube.library.PlaylistRoute
+import fr.appartfinder.freetube.library.PlaylistScreen
+import fr.appartfinder.freetube.library.PlaylistsScreen
 import fr.appartfinder.freetube.playback.FullPlayer
 import fr.appartfinder.freetube.playback.MiniPlayer
 import fr.appartfinder.freetube.playback.PlayerConnection
@@ -61,6 +64,8 @@ import kotlin.reflect.KClass
 
 @Serializable data object LibraryRoute
 
+@Serializable data object PlaylistsRoute
+
 @Serializable data object DownloadsRoute
 
 @Serializable data object SettingsRoute
@@ -71,6 +76,7 @@ import kotlin.reflect.KClass
 enum class Tab(val route: Any, val label: String, val icon: Int) {
     YOUTUBE(YoutubeRoute, "YouTube", R.drawable.ic_youtube),
     LIBRARY(LibraryRoute, "Bibliothèque", R.drawable.ic_library),
+    PLAYLISTS(PlaylistsRoute, "Playlists", R.drawable.ic_playlist),
     DOWNLOADS(DownloadsRoute, "Téléchargements", R.drawable.ic_download),
     SETTINGS(SettingsRoute, "Réglages", R.drawable.ic_settings),
 }
@@ -170,11 +176,15 @@ class MainActivity : ComponentActivity() {
         ) { padding ->
             NavHost(nav, startDestination = YoutubeRoute, modifier = Modifier.padding(padding)) {
                 composable<YoutubeRoute> {
-                    YoutubeScreen(webView) { videoId ->
-                        scope.launch { snackbar.showSnackbar(download(videoId)) }
-                    }
+                    YoutubeScreen(
+                        webView,
+                        onDownload = { scope.launch { snackbar.showSnackbar(download(it)) } },
+                        onImport = { scope.launch { snackbar.showSnackbar(importPlaylist(it)) } },
+                    )
                 }
                 composable<LibraryRoute> { LibraryScreen(hiltViewModel()) }
+                composable<PlaylistsRoute> { PlaylistsScreen(hiltViewModel()) { nav.navigate(PlaylistRoute(it)) } }
+                composable<PlaylistRoute> { PlaylistScreen(hiltViewModel(), onDeleted = { nav.popBackStack() }) }
                 composable<DownloadsRoute> { DownloadsScreen(hiltViewModel()) }
                 composable<SettingsRoute> { SettingsScreen(hiltViewModel()) }
                 composable<PlayerRoute> { FullPlayer(player, playerState) }

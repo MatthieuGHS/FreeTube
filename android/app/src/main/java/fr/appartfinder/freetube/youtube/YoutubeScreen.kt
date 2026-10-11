@@ -10,6 +10,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -56,25 +58,28 @@ class YoutubeWebView(context: Context) : WebView(context) {
 }
 
 @Composable
-fun YoutubeScreen(webView: YoutubeWebView, onDownload: (VideoId) -> Unit) {
+fun YoutubeScreen(webView: YoutubeWebView, onDownload: (VideoId) -> Unit, onImport: (PlaylistId) -> Unit) {
     BackHandler(enabled = webView.canGoBackState) { webView.goBack() }
     val target = remember(webView.currentUrl) { webView.currentUrl?.let(::classifyYoutubeUrl) }
-    // M3: one track at a time; the "Ce morceau / Toute la playlist" menu comes with playlist import (M5).
-    val videoId = when (target) {
-        is YoutubeTarget.Track -> target.videoId
-        is YoutubeTarget.TrackInPlaylist -> target.videoId
-        is YoutubeTarget.Playlist, null -> null
-    }
     Box(Modifier.fillMaxSize()) {
         AndroidView(
             factory = { webView.also { (it.parent as? ViewGroup)?.removeView(it) } },
             modifier = Modifier.fillMaxSize(),
         )
-        if (videoId != null) {
-            ExtendedFloatingActionButton(
-                onClick = { onDownload(videoId) },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-            ) { Text("Télécharger ce morceau") }
+        Box(Modifier.align(Alignment.BottomEnd).padding(16.dp)) {
+            when (target) {
+                is YoutubeTarget.Track -> ExtendedFloatingActionButton(onClick = { onDownload(target.videoId) }) { Text("Télécharger ce morceau") }
+                is YoutubeTarget.Playlist -> ExtendedFloatingActionButton(onClick = { onImport(target.listId) }) { Text("Télécharger la playlist") }
+                is YoutubeTarget.TrackInPlaylist -> {
+                    var open by remember(target) { mutableStateOf(false) }
+                    ExtendedFloatingActionButton(onClick = { open = true }) { Text("Télécharger…") }
+                    DropdownMenu(open, onDismissRequest = { open = false }) {
+                        DropdownMenuItem(text = { Text("Ce morceau") }, onClick = { open = false; onDownload(target.videoId) })
+                        DropdownMenuItem(text = { Text("Toute la playlist") }, onClick = { open = false; onImport(target.listId) })
+                    }
+                }
+                null -> Unit
+            }
         }
     }
 }
