@@ -1,6 +1,7 @@
 package fr.appartfinder.freetube.download
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -174,7 +175,11 @@ class YtDlp @Inject constructor(@ApplicationContext private val context: Context
                     YoutubeDL.execute(request, processId) { progress, _, line -> onLine(progress, line) }
                 }
             } catch (e: YoutubeDLException) {
-                throw PipelineException(classifyYtDlpError(e.message.orEmpty()), e)
+                val stderr = e.message.orEmpty()
+                // Only yt-dlp's own ERROR/WARNING lines: they carry no token nor signed URL, and the enum alone
+                // hides what YouTube actually said.
+                Log.w("YtDlp", stderr.lineSequence().filter { "ERROR" in it || "WARNING" in it }.joinToString("\n").take(2000))
+                throw PipelineException(classifyYtDlpError(stderr), e)
             } finally {
                 killer.cancel()
             }

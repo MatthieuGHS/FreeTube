@@ -10,6 +10,7 @@ class PipelineErrorTest {
         "ERROR: [youtube] xxxxxxxxxxx: Private video. Sign in if you've been granted access" to PipelineError.VIDEO_UNAVAILABLE,
         "ERROR: [youtube] xxxxxxxxxxx: The uploader has not made this video available in your country" to PipelineError.GEO_BLOCKED,
         "ERROR: [youtube] xxxxxxxxxxx: Sign in to confirm your age. This video may be inappropriate" to PipelineError.LOGIN_REQUIRED,
+        "ERROR: [youtube] xxxxxxxxxxx: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication." to PipelineError.BOT_CHECK,
         "ERROR: [youtube] xxxxxxxxxxx: Join this channel to get access to members-only content" to PipelineError.LOGIN_REQUIRED,
         "ERROR: unable to download video data: HTTP Error 403: Forbidden" to PipelineError.ENGINE_OUTDATED,
         "ERROR: [youtube] x: Unable to download API page: <urlopen error [Errno 7] No address associated with hostname>" to PipelineError.NETWORK,

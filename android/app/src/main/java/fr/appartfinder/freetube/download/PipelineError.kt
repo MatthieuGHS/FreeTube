@@ -10,6 +10,7 @@ enum class PipelineError(val label: String, val transient: Boolean) {
     VIDEO_UNAVAILABLE("Vidéo indisponible (supprimée ou privée)", false),
     GEO_BLOCKED("Vidéo bloquée dans ce pays", false),
     LOGIN_REQUIRED("Vidéo réservée aux comptes connectés", false),
+    BOT_CHECK("YouTube bloque temporairement ce téléphone (anti-robot) : réessayez plus tard", true),
     UNSUPPORTED("Format non pris en charge (direct ou durée > 24 h)", false),
     ENGINE_OUTDATED("Moteur obsolète : mettez-le à jour dans Réglages", true),
     NETWORK("Réseau indisponible", true),
@@ -44,6 +45,8 @@ fun classifyYtDlpError(stderr: String): PipelineError {
         "no space left" in s -> PipelineError.NO_SPACE
         "available in your country" in s || "geo restrict" in s || "geo-restrict" in s -> PipelineError.GEO_BLOCKED
         "private video" in s || "video unavailable" in s || "has been removed" in s -> PipelineError.VIDEO_UNAVAILABLE
+        // "Sign in to confirm you're not a bot" is a temporary block of this device/IP, not an account-only video.
+        "not a bot" in s -> PipelineError.BOT_CHECK
         "sign in to confirm" in s || "members-only" in s || "join this channel" in s -> PipelineError.LOGIN_REQUIRED
         "is live" in s || "live event" in s || "premieres in" in s -> PipelineError.UNSUPPORTED
         "http error 403" in s -> PipelineError.ENGINE_OUTDATED
